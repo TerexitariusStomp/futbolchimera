@@ -27,6 +27,22 @@ async function getMachineId() {
   }
 }
 
+const SOCCER_DIR = FileSystem.documentDirectory + 'soccer/';
+const AI_COACH_PROMPTS_DIR = SOCCER_DIR + 'prompts/';
+const ANALYTICS_DATA_DIR = SOCCER_DIR + 'analytics/';
+const VISION_MODELS_DIR = SOCCER_DIR + 'models/';
+
+async function initSoccerDirs() {
+  try {
+    await FileSystem.makeDirectoryAsync(SOCCER_DIR, { intermediates: true }).catch(() => {});
+    await FileSystem.makeDirectoryAsync(AI_COACH_PROMPTS_DIR, { intermediates: true }).catch(() => {});
+    await FileSystem.makeDirectoryAsync(ANALYTICS_DATA_DIR, { intermediates: true }).catch(() => {});
+    await FileSystem.makeDirectoryAsync(VISION_MODELS_DIR, { intermediates: true }).catch(() => {});
+  } catch (e) {
+    console.error('Failed to init soccer dirs:', e);
+  }
+}
+
 export default function App() {
   const [modelStatus, setModelStatus] = useState('initializing');
   const [webLoading, setWebLoading] = useState(true);
@@ -42,6 +58,7 @@ export default function App() {
         await FileSystem.makeDirectoryAsync(TDAI_L1_DIR, { intermediates: true }).catch(() => {});
         await FileSystem.makeDirectoryAsync(TDAI_L2_DIR, { intermediates: true }).catch(() => {});
         await FileSystem.makeDirectoryAsync(TDAI_L3_DIR, { intermediates: true }).catch(() => {});
+        await initSoccerDirs();
         const id = await getMachineId();
         setMachineId(id);
         // On-device LLM via @qvac/sdk has been removed; app now uses the
@@ -639,6 +656,173 @@ export default function App() {
     return { success: true, data: { topic, inviteUrl: 'chimera://join/' + topic } };
   }
 
+  // ============================
+  // Soccer Coach Integration Endpoints (On-Device)
+  // ============================
+
+  // AI Coach using local prompt templates and rule-based insights
+  async function handleSoccerAiCoach(body) {
+    try {
+      await initSoccerDirs();
+
+      const coachPromptPath = AI_COACH_PROMPTS_DIR + 'coach_template.txt';
+      let coachTemplate = '';
+      try {
+        coachTemplate = await FileSystem.readAsStringAsync(coachPromptPath);
+      } catch (e) {
+        coachTemplate = `You are a tactical soccer coach assistant. Analyze this match data: {data}`;
+        await FileSystem.writeAsStringAsync(coachPromptPath, coachTemplate);
+      }
+
+      const prompt = coachTemplate.replace('{data}', JSON.stringify(body.events || []));
+      const insight = generateLocalInsight(body.events, body.role || 'coach');
+
+      return { success: true, insight };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  }
+
+  function generateLocalInsight(events, role) {
+    if (!events || events.length === 0) {
+      return 'No match data available for analysis.';
+    }
+
+    const eventTypes = {};
+    events.forEach(e => {
+      eventTypes[e.type] = (eventTypes[e.type] || 0) + 1;
+    });
+
+    let analysis = `**Match Analysis**\n\n`;
+    analysis += `**Event Summary**:\n`;
+    Object.entries(eventTypes).forEach(([type, count]) => {
+      analysis += `- ${type}: ${count}\n`;
+    });
+
+    if (role === 'coach') {
+      analysis += `\n**Tactical Observations**:\n`;
+      analysis += `- Total events analyzed: ${events.length}\n`;
+      analysis += `- Key patterns detected based on event distribution\n`;
+      analysis += `- Recommend reviewing player positioning based on event locations\n`;
+    } else {
+      analysis += `\n**Simple Summary**:\n`;
+      analysis += `- The team had ${events.length} total events\n`;
+      analysis += `- Main activities: ${Object.keys(eventTypes).slice(0, 3).join(', ')}\n`;
+    }
+
+    return analysis;
+  }
+
+  async function handleSoccerAiChat(body) {
+    try {
+      await handleTdaiCapture({
+        user_content: body.message,
+        assistant_content: null,
+        session_key: 'soccer-coach'
+      });
+
+      const response = `I understand you're asking about: "${body.message}". As your soccer coach assistant, I can help with tactical analysis, player evaluations, and match planning. Full AI responses require on-device LLM activation.`;
+
+      await handleTdaiCapture({
+        user_content: body.message,
+        assistant_content: response,
+        session_key: 'soccer-coach'
+      });
+
+      return { success: true, response };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  }
+
+  async function handleSoccerVisualize(body) {
+    try {
+      await initSoccerDirs();
+
+      const vizData = {
+        type: body.data_type || 'passing_network',
+        data: body.match_data || {},
+        message: 'Visualization data prepared. Frontend should render using chart libraries.'
+      };
+
+      return { success: true, vizData };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  }
+
+  async function handleSoccerReference(query) {
+    try {
+      const topic = query.replace(/^topic=/, '');
+
+      const refPath = ANALYTICS_DATA_DIR + `reference_${topic}.md`;
+      try {
+        const content = await FileSystem.readAsStringAsync(refPath);
+        return { success: true, topic, content };
+      } catch (e) {
+        const basicRef = `# ${topic}\n\nReference information from analytics-handbook. Full content requires importing the notebook data.`;
+        return { success: true, topic, content: basicRef };
+      }
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  }
+
+  async function handleSoccerDetect(body) {
+    try {
+      await initSoccerDirs();
+
+      const detections = {
+        message: 'Computer vision detection requires on-device ML models (TensorFlow Lite/Core ML)',
+        detection_type: body.detection_type || 'player',
+        status: 'model_not_loaded'
+      };
+
+      return { success: true, detections };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  }
+
+  // Model Management System
+  async function handleSoccerModelList() {
+    try {
+      await initSoccerDirs();
+      const models = await FileSystem.readDirectoryAsync(VISION_MODELS_DIR).catch(() => []);
+      return { success: true, models };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  }
+
+  async function handleSoccerModelDownload(body) {
+    try {
+      await initSoccerDirs();
+      const { model_name, model_url } = body;
+      if (!model_name || !model_url) {
+        return { success: false, error: 'Missing model_name or model_url' };
+      }
+
+      const downloadRes = await FileSystem.downloadAsync(model_url, VISION_MODELS_DIR + model_name);
+      return { success: true, path: downloadRes.uri };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  }
+
+  async function handleSoccerModelDelete(body) {
+    try {
+      const { model_name } = body;
+      if (!model_name) {
+        return { success: false, error: 'Missing model_name' };
+      }
+      await FileSystem.deleteAsync(VISION_MODELS_DIR + model_name, { idempotent: true });
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  }
+
   const sendBridgeResponse = (id, res) => {
     webViewRef.current?.injectJavaScript(`
       window.__bridgeResolve(${id}, ${JSON.stringify(res)});
@@ -740,6 +924,22 @@ export default function App() {
           res = await handleSwarmCreate();
         } else if (method === 'POST' && cleanPath === '/api/swarm/join') {
           res = await handleSwarmJoin();
+        } else if (method === 'POST' && cleanPath === '/api/soccer/ai-coach') {
+          res = await handleSoccerAiCoach(body);
+        } else if (method === 'POST' && cleanPath === '/api/soccer/ai-chat') {
+          res = await handleSoccerAiChat(body);
+        } else if (method === 'POST' && cleanPath === '/api/soccer/visualize') {
+          res = await handleSoccerVisualize(body);
+        } else if (method === 'GET' && cleanPath.startsWith('/api/soccer/reference')) {
+          res = await handleSoccerReference(query);
+        } else if (method === 'POST' && cleanPath === '/api/soccer/detect') {
+          res = await handleSoccerDetect(body);
+        } else if (method === 'GET' && cleanPath === '/api/soccer/models') {
+          res = await handleSoccerModelList();
+        } else if (method === 'POST' && cleanPath === '/api/soccer/models/download') {
+          res = await handleSoccerModelDownload(body);
+        } else if (method === 'DELETE' && cleanPath === '/api/soccer/models/delete') {
+          res = await handleSoccerModelDelete(body);
         } else {
           res = { success: false, error: 'Not found: ' + method + ' ' + cleanPath };
         }

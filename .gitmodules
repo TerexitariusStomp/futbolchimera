@@ -1,0 +1,9 @@
+[submodule "external/ai-soccercoach"]
+	path = external/ai-soccercoach
+	url = https://github.com/AkramOM606/AI-SoccerCoach.git
+[submodule "external/roboflow-sports"]
+	path = external/roboflow-sports
+	url = https://github.com/roboflow/sports.git
+[submodule "external/analytics-handbook"]
+	path = external/analytics-handbook
+	url = https://github.com/devinpleuler/analytics-handbook.git
