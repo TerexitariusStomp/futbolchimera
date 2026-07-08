@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Github, ChevronRight, Zap, Eye, Wifi, Cpu, Smartphone, BookOpen, Terminal, ArrowUpRight, Copy, Check } from "lucide-react";
+import { Github, ChevronRight, Zap, Wifi, Cpu, Smartphone, BookOpen, Terminal, ArrowUpRight, Copy, Check } from "lucide-react";
 import { ImageWithFallback } from "@/app/components/figma/ImageWithFallback";
 import logoSrc from "@/imports/image.png";
 
@@ -72,16 +72,8 @@ const FEATURES = [
     color: GOLD,
   },
   {
-    icon: Eye,
-    num: "03",
-    title: "Computer Vision",
-    body: "Real-time detection of players, balls, jersey numbers, and pitch keypoints via Roboflow Sports models at 30fps.",
-    tag: "Roboflow Sports",
-    color: BLUE,
-  },
-  {
     icon: Wifi,
-    num: "04",
+    num: "03",
     title: "P2P Swarming",
     body: "Device-to-device sync of notes and tactics via Pear/Hyperswarm networking — no server required on the sideline.",
     tag: "Hyperswarm",
@@ -89,7 +81,7 @@ const FEATURES = [
   },
   {
     icon: Smartphone,
-    num: "05",
+    num: "04",
     title: "Cross-platform",
     body: "Built with Expo SDK 52 and React Native 0.76 targeting iOS and Android, plus a legacy Capacitor app for older setups.",
     tag: "Expo · Capacitor",
@@ -97,7 +89,7 @@ const FEATURES = [
   },
   {
     icon: Cpu,
-    num: "06",
+    num: "05",
     title: "On-device AI",
     body: "Local inference through QVAC/BareKit with seamless cloud API fallback when heavier models are needed.",
     tag: "QVAC · BareKit",
@@ -109,7 +101,6 @@ const SUBMODULES = [
   { name: "AI-SoccerCoach", desc: "Localized coaching prompts and tactical Q&A engine", tag: "Core", color: GOLD },
   { name: "analytics-handbook", desc: "xG, passing networks, pitch control, shot map theory", tag: "Reference", color: GOLD },
   { name: "football-analytics-tutorials", desc: "Step-by-step walkthroughs of advanced match analysis", tag: "Learning", color: BLUE },
-  { name: "roboflow-sports", desc: "Pre-trained YOLO models for player, ball, pitch detection", tag: "Vision", color: BLUE },
 ];
 
 const TEMPLATES = [
@@ -246,7 +237,7 @@ function Hero() {
             </h1>
 
             <p className="font-['DM_Sans'] text-muted-foreground text-lg max-w-xl mb-10 leading-relaxed">
-              AI coaching, match analytics, computer vision, and peer-to-peer team sync — all running locally on iOS and Android.
+              AI coaching, match analytics, and peer-to-peer team sync — all running locally on iOS and Android.
             </p>
 
             <div className="flex flex-wrap gap-4 mb-20">
