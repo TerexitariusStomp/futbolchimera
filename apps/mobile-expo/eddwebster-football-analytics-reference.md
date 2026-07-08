@@ -5,6 +5,8 @@ Source: `eddwebster/football_analytics`
 
 A curated collection of football analytics projects, data, notebooks, dashboards, and publicly available resources from the football analytics community.
 
+For the high-level index of all integrated repos and templates, see `analytics-reference.md`.
+
 ## Repository Structure
 
 ### `notebooks/`

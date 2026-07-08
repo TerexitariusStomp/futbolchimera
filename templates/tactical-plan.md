@@ -1,5 +1,7 @@
 # Tactical Plan Template
 
+**Purpose:** Pre-match tactical setup including formation, roles, attacking/defensive strategy, and in-game scenario planning.
+
 ## Match Information
 - **Opponent**: 
 - **Date**: 

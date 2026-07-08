@@ -1,5 +1,7 @@
 # Player Evaluation Template
 
+**Purpose:** Individual player assessment covering technical, physical, mental attributes, match performance, and development goals.
+
 ## Player Information
 - **Name**: 
 - **Position**: 

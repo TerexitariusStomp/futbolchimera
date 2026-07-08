@@ -5,6 +5,8 @@ Source: `ricardoherediaj/football-analytics-tutorials`
 
 Open-source tutorials and code snippets for football analytics.
 
+For the high-level index of all integrated repos and templates, see `analytics-reference.md`.
+
 ## What's Included
 
 ### Match Event Data
@@ -12,13 +14,9 @@ Open-source tutorials and code snippets for football analytics.
 - Event coordinates on the pitch
 - Timestamp and context for each action
 
-### Expected Goals (xG)
-- Model the probability of a shot resulting in a goal
-- Factors: shot location, body part, assist type, defensive pressure
-
-### Expected Threat (xT)
-- Evaluate how much a pass or carry increases the chance of scoring
-- Useful for identifying progressive actions
+### Expected Goals (xG) and Expected Threat (xT)
+- See `templates/xg-analysis.md` for practical xG analysis
+- xT evaluates how much a pass or carry increases scoring chance
 
 ### Interactive Dashboards
 - Match dashboard templates

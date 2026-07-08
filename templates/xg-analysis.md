@@ -1,5 +1,7 @@
 # Expected Goals (xG) Analysis Template
 
+**Purpose:** Deep dive into shot quality and chance creation using Expected Goals. Use after running xG models or importing xG data.
+
 ## Match Information
 - **Date**: 
 - **Opponent**: 

@@ -1,5 +1,7 @@
 # On-Device Vision Models Guide
 
+**Purpose:** Roadmap for converting roboflow/sports Python models to mobile-optimized TensorFlow Lite / Core ML formats for the `/api/soccer/detect` and `/api/soccer/models` bridge handlers.
+
 ## Model Conversion for Mobile
 
 The roboflow/sports repository provides Python-based computer vision models. To use these on mobile devices, models must be converted to mobile-optimized formats:

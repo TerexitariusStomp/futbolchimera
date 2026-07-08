@@ -1,5 +1,7 @@
 # Match Dashboard Template
 
+**Purpose:** Structured metrics table and chart placeholders for building a visual match dashboard. Use this when importing StatsBomb/FBref data or notebook outputs.
+
 ## Match Summary
 - **Date**: 
 - **Home Team**: 

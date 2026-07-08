@@ -1,5 +1,7 @@
 # Match Analysis Template
 
+**Purpose:** Narrative post-match report focusing on events, tactical observations, player performance, and key takeaways.
+
 ## Match Information
 - **Date**: 
 - **Opponent**: 

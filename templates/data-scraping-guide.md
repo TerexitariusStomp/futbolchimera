@@ -1,5 +1,7 @@
 # Data Scraping Guide Template
 
+**Purpose:** Planning checklist and notes for collecting football data from external sources. Scraping itself runs on a desktop; results are imported to the app.
+
 ## Target Data Source
 - **Website/API**: 
 - **Data Type**: 

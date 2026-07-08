@@ -1,74 +1,35 @@
 # Soccer Analytics Reference
 
-## Key Concepts from analytics-handbook
+This file is the high-level index. Detailed concepts, data sources, and per-repo guides are linked below.
 
-### Expected Goals (xG)
-Expected Goals (xG) is a statistical metric used to assess the quality of a chance created. It measures the probability of a shot resulting in a goal.
+## Core Concepts
 
-### Passing Networks
-Passing networks visualize the connections between players based on pass completion data.
-
-### Pitch Control
-Pitch control models estimate the probability of each team controlling the ball at any location on the field.
-
-### Player Tracking
-Modern tracking systems provide x,y coordinates for all players at high frequency, enabling detailed movement analysis.
+- **Expected Goals (xG)** — see `templates/xg-analysis.md` and `football-analytics-tutorials-reference.md`
+- **Passing Networks** — connections between players based on pass completion
+- **Pitch Control** — probability of controlling the ball at any pitch location
+- **Player Tracking** — x,y coordinates for all players at high frequency
 
 ## Statistical Methods
 
-### Poisson Distribution
-Used for modeling goal scoring patterns and match outcome probabilities.
-
-### Regression Analysis
-Used for identifying relationships between variables like possession and goals.
-
-### Cluster Analysis
-Used for identifying similar playing styles and player types.
-
-## Data Sources
-
-### StatsBomb Open Data
-Free event data and tracking data available for research.
-
-### Metrica Sports
-Open source tracking and event data for educational purposes.
-
-### FBref
-Comprehensive football statistics and aggregated match data.
-
-### Transfermarkt
-Player market values, transfers, and squad data.
-
-### Opta
-Detailed event data provider used across professional football analytics.
-
-### Wyscout
-Scouting and match analysis data platform.
+- **Poisson Distribution** — goal scoring and match outcome probabilities
+- **Regression Analysis** — relationships between variables like possession and goals
+- **Cluster Analysis** — identifying similar playing styles and player types
 
 ## Integrated Repositories
 
-### eddwebster/football_analytics
-Curated collection of football analytics projects, data sources, notebooks, dashboards, and resources. Useful for discovering libraries, datasets, and community projects.
+| Repository | Focus | Detailed Reference |
+|------------|-------|-------------------|
+| `eddwebster/football_analytics` | Curated resources, data sources, notebooks, dashboards | `eddwebster-football-analytics-reference.md` |
+| `ricardoherediaj/football-analytics-tutorials` | Tutorials for xG, xT, dashboards, scraping | `football-analytics-tutorials-reference.md` |
+| `devinpleuler/analytics-handbook` | Soccer analytics handbook using StatsBomb open data | linked repo |
+| `AkramOM606/AI-SoccerCoach` | Generative AI coaching assistant | `ai-coach-prompts.md` |
+| `roboflow/sports` | Computer vision models for sports | `vision-models-guide.md` |
 
-### ricardoherediaj/football-analytics-tutorials
-Open-source tutorials and code snippets covering match event data, xG, xT, interactive dashboards, and web scraping.
+## Wiki Templates
 
-### devinpleuler/analytics-handbook
-Soccer analytics handbook with tutorials using StatsBomb open data and libraries like mplsoccer, kloppy, and statsbombpy.
-
-### AkramOM606/AI-SoccerCoach
-Generative AI assistant for soccer coaching using match data and tactical prompts.
-
-### roboflow/sports
-Computer vision models and tools for sports analytics, including player/ball detection and pitch keypoints.
-
-## Visualization Techniques
-
-### Heat Maps
-Show player movement density across the pitch.
-
-### Shot Maps
-Display shot locations and outcomes.
-
-### Passing Arrows
-Indicate direction and frequency of passes between players.
+- `templates/match-analysis.md` — narrative post-match report
+- `templates/dashboard-template.md` — metrics + chart placeholders
+- `templates/xg-analysis.md` — xG-focused shot and chance analysis
+- `templates/data-scraping-guide.md` — scraping workflow checklist
+- `templates/player-evaluation.md` — individual player assessment
+- `templates/tactical-plan.md` — pre-match tactical setup
