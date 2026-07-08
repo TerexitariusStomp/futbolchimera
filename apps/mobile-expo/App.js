@@ -3,6 +3,7 @@ import { StyleSheet, View, Text, ActivityIndicator, Linking, Platform } from 're
 import { WebView } from 'react-native-webview';
 import * as FileSystem from 'expo-file-system';
 import Constants from 'expo-constants';
+import b4a from 'b4a';
 
 const WIKI_DIR = FileSystem.documentDirectory + 'llmwiki/';
 const MACHINE_ID_FILE = WIKI_DIR + '.machine-id';
@@ -30,14 +31,12 @@ async function getMachineId() {
 const SOCCER_DIR = FileSystem.documentDirectory + 'soccer/';
 const AI_COACH_PROMPTS_DIR = SOCCER_DIR + 'prompts/';
 const ANALYTICS_DATA_DIR = SOCCER_DIR + 'analytics/';
-const VISION_MODELS_DIR = SOCCER_DIR + 'models/';
 
 async function initSoccerDirs() {
   try {
     await FileSystem.makeDirectoryAsync(SOCCER_DIR, { intermediates: true }).catch(() => {});
     await FileSystem.makeDirectoryAsync(AI_COACH_PROMPTS_DIR, { intermediates: true }).catch(() => {});
     await FileSystem.makeDirectoryAsync(ANALYTICS_DATA_DIR, { intermediates: true }).catch(() => {});
-    await FileSystem.makeDirectoryAsync(VISION_MODELS_DIR, { intermediates: true }).catch(() => {});
   } catch (e) {
     console.error('Failed to init soccer dirs:', e);
   }
@@ -48,7 +47,16 @@ export default function App() {
   const [webLoading, setWebLoading] = useState(true);
   const [webError, setWebError] = useState(null);
   const [machineId, setMachineId] = useState('');
+  const [pearAvailable, setPearAvailable] = useState(false);
+  const [pearStatus, setPearStatus] = useState({ running: false, peers: 0, topics: [] });
+  const [qvacAvailable, setQvacAvailable] = useState(false);
+  const [qvacModelId, setQvacModelId] = useState(null);
+  const [qvacModelLoading, setQvacModelLoading] = useState(false);
+  const [qvacModelProgress, setQvacModelProgress] = useState(0);
   const webViewRef = useRef(null);
+  const pearWorkletRef = useRef(null);
+  const pearPendingRef = useRef(new Map());
+  const pearReqIdRef = useRef(0);
 
   useEffect(() => {
     async function init() {
@@ -61,15 +69,100 @@ export default function App() {
         await initSoccerDirs();
         const id = await getMachineId();
         setMachineId(id);
-        // On-device LLM via @qvac/sdk has been removed; app now uses the
-        // @localchimera/sdk stack without qvac/BareKit native dependencies.
-        setModelStatus('not available');
+
+        // Load on-device LLM via @qvac/sdk. If BareKit/QVAC is unavailable,
+        // the app keeps running and AI endpoints report unavailable.
+        try {
+          const { loadModel, LLAMA_3_2_1B_INST_Q4_0 } = await import('@qvac/sdk');
+          console.log('[App] Loading QVAC on-device model...');
+          setQvacModelLoading(true);
+          setModelStatus('loading model');
+          const modelId = await loadModel({
+            modelSrc: LLAMA_3_2_1B_INST_Q4_0,
+            modelType: 'llm',
+            onProgress: (progress) => {
+              console.log('[App] QVAC model load progress:', progress);
+              setQvacModelProgress(progress);
+            },
+          });
+          setQvacModelId(modelId);
+          setQvacAvailable(true);
+          setModelStatus('ready');
+          console.log('[App] QVAC model loaded:', modelId);
+        } catch (modelErr) {
+          console.error('[App] QVAC model load failed:', modelErr);
+          setModelStatus(`error: ${modelErr.message}`);
+        } finally {
+          setQvacModelLoading(false);
+        }
       } catch (e) {
         console.error('Init error:', e);
         setModelStatus(`error: ${e.message}`);
       }
     }
     init();
+  }, []);
+
+  // Start the Pear P2P worklet (Bare + Hyperswarm) for native swarming.
+  // If react-native-bare-kit is not available or the bundle has not been built,
+  // the app falls back to the local-only stub swarm handlers.
+  useEffect(() => {
+    let worklet = null;
+    let terminated = false;
+
+    async function startPear() {
+      try {
+        const { Worklet } = await import('react-native-bare-kit');
+        const bundle = await import('./pear-worker.bundle.js');
+        if (!bundle.default) {
+          console.log('[Pear] No worker bundle found. Run npm run build:pear-worker.');
+          return;
+        }
+        worklet = new Worklet();
+        worklet.start('/pear-worker.bundle', bundle.default);
+        pearWorkletRef.current = worklet;
+
+        const { IPC } = worklet;
+        IPC.on('data', (data) => {
+          try {
+            const msg = JSON.parse(b4a.toString(data));
+            if (msg.type === 'ready') {
+              console.log('[Pear] Worklet ready');
+              setPearAvailable(true);
+              setPearStatus(s => ({ ...s, running: true }));
+            } else if (msg.type === 'error') {
+              console.error('[Pear] Worklet error:', msg.error);
+              setPearAvailable(false);
+            } else if (msg.type === 'response') {
+              const pending = pearPendingRef.current.get(msg.id);
+              if (pending) {
+                pending.resolve(msg);
+                pearPendingRef.current.delete(msg.id);
+              }
+            } else if (msg.type === 'peer-connected' || msg.type === 'peer-disconnected') {
+              setPearStatus(s => ({ ...s, peers: msg.peers || s.peers }));
+            }
+          } catch (e) {
+            console.error('[Pear] IPC parse error:', e);
+          }
+        });
+      } catch (e) {
+        console.log('[Pear] Bare worklet unavailable:', e.message);
+      }
+    }
+
+    startPear();
+
+    return () => {
+      terminated = true;
+      if (worklet) {
+        try { worklet.terminate(); } catch (e) {}
+      }
+      for (const pending of pearPendingRef.current.values()) {
+        pending.reject(new Error('Worklet terminated'));
+      }
+      pearPendingRef.current.clear();
+    };
   }, []);
 
   // Handle deep links from the browser-based wallet flow
@@ -103,20 +196,50 @@ export default function App() {
   }, []);
 
   async function handleAIWrite(body) {
-    return {
-      success: false,
-      error: 'On-device AI is not available in this build. Use a remote inference endpoint.',
-    };
+    if (!qvacAvailable || !qvacModelId) {
+      return {
+        success: false,
+        error: 'On-device QVAC AI is not available in this build.',
+      };
+    }
+    try {
+      const { completion } = await import('@qvac/sdk');
+      const history = [{ role: 'user', content: body?.prompt || '' }];
+      const result = completion({ modelId: qvacModelId, history, stream: false });
+      let text = '';
+      if (result && typeof result.text === 'object' && result.text !== null && typeof result.text.then === 'function') {
+        text = await result.text;
+      } else if (result && typeof result.tokenStream === 'object' && result.tokenStream !== null && typeof result.tokenStream[Symbol.asyncIterator] === 'function') {
+        for await (const token of result.tokenStream) {
+          text += token;
+        }
+      } else {
+        text = String(result || '');
+      }
+      return {
+        success: true,
+        data: {
+          title: body?.title || 'Generated',
+          body: text,
+          source: 'qvac-on-device',
+          model: 'LLAMA_3_2_1B_INST_Q4_0',
+        },
+      };
+    } catch (e) {
+      console.error('[App] QVAC ai-write failed:', e);
+      return { success: false, error: e.message || 'QVAC inference error' };
+    }
   }
 
   async function handleAIStatus() {
     return {
       success: true,
       data: {
-        available: false,
-        qvacAvailable: false,
-        model: null,
-        modelLoading: false,
+        available: qvacAvailable,
+        qvacAvailable,
+        model: qvacModelId ? 'LLAMA_3_2_1B_INST_Q4_0' : null,
+        modelLoading: qvacModelLoading,
+        modelProgress: qvacModelProgress,
       },
     };
   }
@@ -605,8 +728,33 @@ export default function App() {
     return { success: true, data: { running: false } };
   }
 
+  async function pearRequest(action, body = {}) {
+    if (!pearAvailable || !pearWorkletRef.current) {
+      throw new Error('Pear P2P not available');
+    }
+    const id = ++pearReqIdRef.current;
+    const { IPC } = pearWorkletRef.current;
+    return new Promise((resolve, reject) => {
+      pearPendingRef.current.set(id, { resolve, reject });
+      IPC.write(b4a.from(JSON.stringify({ id, action, body })));
+      setTimeout(() => {
+        if (pearPendingRef.current.has(id)) {
+          pearPendingRef.current.delete(id);
+          reject(new Error('Pear request timeout'));
+        }
+      }, 30000);
+    });
+  }
+
   async function handleSwarmStatus() {
-    return { success: true, data: { id: null, status: 'local-only', peers: 0 } };
+    if (pearAvailable) {
+      try {
+        return await pearRequest('swarm/status');
+      } catch (e) {
+        console.warn('[Pear] swarm/status failed, falling back:', e.message);
+      }
+    }
+    return { success: true, data: { ...pearStatus, id: null, status: 'local-only' } };
   }
 
   async function handleWeb3AuthConfig() {
@@ -642,6 +790,13 @@ export default function App() {
   }
 
   async function handleSwarmCreate(body) {
+    if (pearAvailable) {
+      try {
+        return await pearRequest('swarm/create', body);
+      } catch (e) {
+        console.warn('[Pear] swarm/create failed, falling back:', e.message);
+      }
+    }
     const id = await getMachineId();
     const scope = body && body.scope;
     const pageId = body && body.pageId;
@@ -652,8 +807,37 @@ export default function App() {
   }
 
   async function handleSwarmJoin(body) {
+    if (pearAvailable) {
+      try {
+        return await pearRequest('swarm/join', body);
+      } catch (e) {
+        console.warn('[Pear] swarm/join failed, falling back:', e.message);
+      }
+    }
     const topic = body.topic || (await getMachineId() + '-wiki');
     return { success: true, data: { topic, inviteUrl: 'chimera://join/' + topic } };
+  }
+
+  async function handleSwarmBroadcast(body) {
+    if (pearAvailable) {
+      try {
+        return await pearRequest('swarm/broadcast', body);
+      } catch (e) {
+        console.warn('[Pear] swarm/broadcast failed:', e.message);
+      }
+    }
+    return { success: true, data: { scope: body?.scope || 'wiki', pageId: body?.pageId || null, local: true } };
+  }
+
+  async function handleSwarmTopics(body) {
+    if (pearAvailable) {
+      try {
+        return await pearRequest('swarm/topics', body);
+      } catch (e) {
+        console.warn('[Pear] swarm/topics failed, falling back:', e.message);
+      }
+    }
+    return { success: true, data: { wiki: [], page: [] } };
   }
 
   // ============================
@@ -713,6 +897,102 @@ export default function App() {
     return analysis;
   }
 
+  // ============================
+  // Production LLM Configuration
+  // ============================
+
+  const LLM_CONFIG_FILE = SOCCER_DIR + 'llm_config.json';
+
+  async function getLlmConfig() {
+    try {
+      const raw = await FileSystem.readAsStringAsync(LLM_CONFIG_FILE);
+      return JSON.parse(raw);
+    } catch (e) {
+      return {
+        provider: 'openai',
+        baseUrl: 'https://api.openai.com/v1',
+        apiKey: null,
+        model: 'gpt-4o-mini',
+        enabled: false,
+      };
+    }
+  }
+
+  async function handleSoccerLlmConfig(body) {
+    try {
+      await initSoccerDirs();
+      if (!body) {
+        const config = await getLlmConfig();
+        return { success: true, config };
+      }
+      const config = {
+        provider: body.provider || 'openai',
+        baseUrl: body.baseUrl || 'https://api.openai.com/v1',
+        apiKey: body.apiKey || null,
+        model: body.model || 'gpt-4o-mini',
+        enabled: !!body.apiKey,
+      };
+      await FileSystem.writeAsStringAsync(LLM_CONFIG_FILE, JSON.stringify(config));
+      return { success: true, config };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  }
+
+  async function callRemoteLlm(messages, config) {
+    const url = config.baseUrl.replace(/\/$/, '') + '/chat/completions';
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + config.apiKey,
+      },
+      body: JSON.stringify({
+        model: config.model,
+        messages,
+        temperature: 0.7,
+      }),
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error('LLM API error ' + res.status + ': ' + text);
+    }
+    const data = await res.json();
+    return data.choices?.[0]?.message?.content || '';
+  }
+
+  async function handleSoccerAiCoach(body) {
+    try {
+      await initSoccerDirs();
+
+      const config = await getLlmConfig();
+      const coachPromptPath = AI_COACH_PROMPTS_DIR + 'coach_template.txt';
+      let coachTemplate = '';
+      try {
+        coachTemplate = await FileSystem.readAsStringAsync(coachPromptPath);
+      } catch (e) {
+        coachTemplate = `You are a tactical soccer coach assistant. Analyze this match data and provide actionable coaching insights: {data}`;
+        await FileSystem.writeAsStringAsync(coachPromptPath, coachTemplate);
+      }
+
+      const prompt = coachTemplate.replace('{data}', JSON.stringify(body.events || []));
+
+      if (config.enabled) {
+        const messages = [
+          { role: 'system', content: 'You are an expert soccer coach assistant.' },
+          { role: 'user', content: prompt }
+        ];
+        const insight = await callRemoteLlm(messages, config);
+        return { success: true, insight, source: 'llm' };
+      }
+
+      const insight = generateLocalInsight(body.events, body.role || 'coach');
+      return { success: true, insight, source: 'local' };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  }
+
   async function handleSoccerAiChat(body) {
     try {
       await handleTdaiCapture({
@@ -721,7 +1001,19 @@ export default function App() {
         session_key: 'soccer-coach'
       });
 
-      const response = `I understand you're asking about: "${body.message}". As your soccer coach assistant, I can help with tactical analysis, player evaluations, and match planning. Full AI responses require on-device LLM activation.`;
+      const config = await getLlmConfig();
+      let response;
+      if (config.enabled) {
+        const history = await getTdaiSessionRecords('soccer-coach', 6);
+        const messages = [
+          { role: 'system', content: 'You are a helpful soccer coach assistant for tactical analysis, player evaluation, and match planning.' },
+          ...history,
+          { role: 'user', content: body.message }
+        ];
+        response = await callRemoteLlm(messages, config);
+      } else {
+        response = `I understand you're asking about: "${body.message}". As your soccer coach assistant, I can help with tactical analysis, player evaluations, and match planning. Configure an LLM API key for full AI responses.`;
+      }
 
       await handleTdaiCapture({
         user_content: body.message,
@@ -729,21 +1021,84 @@ export default function App() {
         session_key: 'soccer-coach'
       });
 
-      return { success: true, response };
+      return { success: true, response, source: config.enabled ? 'llm' : 'local' };
     } catch (e) {
       return { success: false, error: e.message };
     }
+  }
+
+  async function getTdaiSessionRecords(sessionKey, limit) {
+    const entries = await FileSystem.readDirectoryAsync(TDAI_L0_DIR).catch(() => []);
+    const records = [];
+    for (const name of entries) {
+      if (!name.endsWith('.json')) continue;
+      try {
+        const raw = await FileSystem.readAsStringAsync(TDAI_L0_DIR + name);
+        const rec = JSON.parse(raw);
+        if (rec.session_key === sessionKey) {
+          records.push(rec);
+        }
+      } catch (e) {}
+    }
+    records.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+    return records.slice(-limit).map(r => ({
+      role: r.role === 'assistant' ? 'assistant' : 'user',
+      content: r.message_text || ''
+    }));
   }
 
   async function handleSoccerVisualize(body) {
     try {
       await initSoccerDirs();
 
-      const vizData = {
-        type: body.data_type || 'passing_network',
-        data: body.match_data || {},
-        message: 'Visualization data prepared. Frontend should render using chart libraries.'
-      };
+      const vizType = body.data_type || 'event_summary';
+      const events = body.events || [];
+      let vizData = { type: vizType };
+
+      if (vizType === 'event_summary') {
+        const counts = {};
+        events.forEach(e => {
+          counts[e.type] = (counts[e.type] || 0) + 1;
+        });
+        vizData.labels = Object.keys(counts);
+        vizData.values = Object.values(counts);
+      } else if (vizType === 'shot_map') {
+        vizData.shots = events
+          .filter(e => e.type === 'Shot')
+          .map(e => ({
+            x: (e.location && e.location[0]) || 50,
+            y: (e.location && e.location[1]) || 50,
+            xg: e.xg || 0,
+            outcome: e.outcome || 'Unknown',
+            player: e.player || 'Unknown',
+          }));
+      } else if (vizType === 'passing_network') {
+        const passes = events.filter(e => e.type === 'Pass');
+        const nodes = {};
+        const links = {};
+        passes.forEach(p => {
+          const src = p.player || 'Unknown';
+          const dst = p.recipient || 'Unknown';
+          nodes[src] = (nodes[src] || 0) + 1;
+          nodes[dst] = (nodes[dst] || 0) + 1;
+          const key = src + '->' + dst;
+          links[key] = (links[key] || 0) + 1;
+        });
+        vizData.nodes = Object.entries(nodes).map(([name, count]) => ({ name, count }));
+        vizData.links = Object.entries(links).map(([key, count]) => {
+          const parts = key.split('->');
+          return { source: parts[0], target: parts[1], count };
+        });
+      } else if (vizType === 'xg_timeline') {
+        const shots = events
+          .filter(e => e.type === 'Shot' && typeof e.minute === 'number' && typeof e.xg === 'number')
+          .sort((a, b) => a.minute - b.minute);
+        let cumulative = 0;
+        vizData.points = shots.map(s => {
+          cumulative += s.xg;
+          return { minute: s.minute, xg: cumulative, team: s.team || 'Unknown' };
+        });
+      }
 
       return { success: true, vizData };
     } catch (e) {
@@ -755,12 +1110,12 @@ export default function App() {
     try {
       const topic = query.replace(/^topic=/, '');
 
-      const refPath = ANALYTICS_DATA_DIR + `reference_${topic}.md`;
+      const refPath = ANALYTICS_DATA_DIR + 'reference_' + topic + '.md';
       try {
         const content = await FileSystem.readAsStringAsync(refPath);
         return { success: true, topic, content };
       } catch (e) {
-        const basicRef = `# ${topic}\n\nReference information from analytics-handbook. Full content requires importing the notebook data.`;
+        const basicRef = '# ' + topic + '\n\nReference information from analytics-handbook. Full content requires importing the notebook data.';
         return { success: true, topic, content: basicRef };
       }
     } catch (e) {
@@ -768,59 +1123,63 @@ export default function App() {
     }
   }
 
-  async function handleSoccerDetect(body) {
+  // ============================
+  // Data Import for Production
+  // ============================
+
+  async function handleSoccerImport(body) {
     try {
       await initSoccerDirs();
-
-      const detections = {
-        message: 'Computer vision detection requires on-device ML models (TensorFlow Lite/Core ML)',
-        detection_type: body.detection_type || 'player',
-        status: 'model_not_loaded'
-      };
-
-      return { success: true, detections };
-    } catch (e) {
-      return { success: false, error: e.message };
-    }
-  }
-
-  // Model Management System
-  async function handleSoccerModelList() {
-    try {
-      await initSoccerDirs();
-      const models = await FileSystem.readDirectoryAsync(VISION_MODELS_DIR).catch(() => []);
-      return { success: true, models };
-    } catch (e) {
-      return { success: false, error: e.message };
-    }
-  }
-
-  async function handleSoccerModelDownload(body) {
-    try {
-      await initSoccerDirs();
-      const { model_name, model_url } = body;
-      if (!model_name || !model_url) {
-        return { success: false, error: 'Missing model_name or model_url' };
+      const { source, format, content, target_page } = body;
+      if (!content) {
+        return { success: false, error: 'Missing content' };
       }
 
-      const downloadRes = await FileSystem.downloadAsync(model_url, VISION_MODELS_DIR + model_name);
-      return { success: true, path: downloadRes.uri };
+      let parsed;
+      if (format === 'json') {
+        parsed = JSON.parse(content);
+      } else if (format === 'csv') {
+        parsed = parseSimpleCsv(content);
+      } else {
+        return { success: false, error: 'Unsupported format. Use json or csv.' };
+      }
+
+      const pageId = target_page || (source ? source.replace(/\W+/g, '_') : 'imported_data');
+      const markdown = convertToMarkdown(parsed, source);
+      await FileSystem.writeAsStringAsync(WIKI_DIR + pageId + '.md', markdown);
+
+      return { success: true, page: pageId, rows: Array.isArray(parsed) ? parsed.length : 1 };
     } catch (e) {
       return { success: false, error: e.message };
     }
   }
 
-  async function handleSoccerModelDelete(body) {
-    try {
-      const { model_name } = body;
-      if (!model_name) {
-        return { success: false, error: 'Missing model_name' };
-      }
-      await FileSystem.deleteAsync(VISION_MODELS_DIR + model_name, { idempotent: true });
-      return { success: true };
-    } catch (e) {
-      return { success: false, error: e.message };
+  function parseSimpleCsv(text) {
+    const lines = text.trim().split('\n').filter(Boolean);
+    if (lines.length < 2) return [];
+    const headers = lines[0].split(',').map(h => h.trim());
+    return lines.slice(1).map(line => {
+      const values = line.split(',');
+      const row = {};
+      headers.forEach((h, i) => {
+        row[h] = values[i] ? values[i].trim() : '';
+      });
+      return row;
+    });
+  }
+
+  function convertToMarkdown(data, source) {
+    if (!Array.isArray(data) || data.length === 0) {
+      return `# Imported Data\n\nSource: ${source || 'unknown'}\n\n\`\`\`json\n${JSON.stringify(data, null, 2)}\n\`\`\`\n`;
     }
+    const headers = Object.keys(data[0]);
+    let md = `# Imported Data: ${source || 'unknown'}\n\n`;
+    md += `| ${headers.join(' | ')} |\n`;
+    md += `| ${headers.map(() => '---').join(' | ')} |\n`;
+    data.forEach(row => {
+      md += `| ${headers.map(h => String(row[h] || '')).join(' | ')} |\n`;
+    });
+    return md;
   }
 
   const sendBridgeResponse = (id, res) => {
@@ -921,9 +1280,13 @@ export default function App() {
         } else if (method === 'POST' && cleanPath === '/api/web3auth-jwt') {
           res = await handleWeb3AuthJwt(body);
         } else if (method === 'POST' && cleanPath === '/api/swarm/create') {
-          res = await handleSwarmCreate();
+          res = await handleSwarmCreate(body);
         } else if (method === 'POST' && cleanPath === '/api/swarm/join') {
-          res = await handleSwarmJoin();
+          res = await handleSwarmJoin(body);
+        } else if (method === 'POST' && cleanPath === '/api/swarm/broadcast') {
+          res = await handleSwarmBroadcast(body);
+        } else if (method === 'GET' && cleanPath === '/api/swarm/topics') {
+          res = await handleSwarmTopics(body);
         } else if (method === 'POST' && cleanPath === '/api/soccer/ai-coach') {
           res = await handleSoccerAiCoach(body);
         } else if (method === 'POST' && cleanPath === '/api/soccer/ai-chat') {
@@ -932,14 +1295,10 @@ export default function App() {
           res = await handleSoccerVisualize(body);
         } else if (method === 'GET' && cleanPath.startsWith('/api/soccer/reference')) {
           res = await handleSoccerReference(query);
-        } else if (method === 'POST' && cleanPath === '/api/soccer/detect') {
-          res = await handleSoccerDetect(body);
-        } else if (method === 'GET' && cleanPath === '/api/soccer/models') {
-          res = await handleSoccerModelList();
-        } else if (method === 'POST' && cleanPath === '/api/soccer/models/download') {
-          res = await handleSoccerModelDownload(body);
-        } else if (method === 'DELETE' && cleanPath === '/api/soccer/models/delete') {
-          res = await handleSoccerModelDelete(body);
+        } else if (method === 'POST' && cleanPath === '/api/soccer/import') {
+          res = await handleSoccerImport(body);
+        } else if ((method === 'POST' || method === 'GET') && cleanPath === '/api/soccer/llm-config') {
+          res = await handleSoccerLlmConfig(body);
         } else {
           res = { success: false, error: 'Not found: ' + method + ' ' + cleanPath };
         }

@@ -23,7 +23,17 @@ This file is the high-level index. Detailed concepts, data sources, and per-repo
 | `ricardoherediaj/football-analytics-tutorials` | Tutorials for xG, xT, dashboards, scraping | `football-analytics-tutorials-reference.md` |
 | `devinpleuler/analytics-handbook` | Soccer analytics handbook using StatsBomb open data | linked repo |
 | `AkramOM606/AI-SoccerCoach` | Generative AI coaching assistant | `ai-coach-prompts.md` |
-| `roboflow/sports` | Computer vision models for sports | `vision-models-guide.md` |
+
+## Production Mobile Endpoints
+
+| Endpoint | Capability | Requirements |
+|----------|-----------|--------------|
+| `POST /api/soccer/ai-coach` | LLM-powered tactical analysis | Configure LLM via `/api/soccer/llm-config` |
+| `POST /api/soccer/ai-chat` | Context-aware coaching chat | LLM config + TDAI memory |
+| `POST /api/soccer/visualize` | Chart-ready data (event summary, shot map, passing network, xG timeline) | Frontend charting library |
+| `GET /api/soccer/reference` | Read reference markdowns | Reference files in `apps/mobile-expo/` |
+| `POST /api/soccer/import` | Import CSV/JSON notebook outputs into wiki pages | Data pasted/imported as text |
+| `POST/GET /api/soccer/llm-config` | Configure remote LLM provider and model | API key for OpenAI-compatible endpoint |
 
 ## Wiki Templates
 
