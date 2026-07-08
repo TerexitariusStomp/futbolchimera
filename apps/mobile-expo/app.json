@@ -36,6 +36,8 @@
     },
     "plugins": [
       "./plugins/withIosFrontendResources.js",
+      "expo-bare-kit",
+      "@qvac/sdk",
       [
         "expo-build-properties",
         {

@@ -1,6 +1,6 @@
 # AI Coach Prompts
 
-**Purpose:** On-device prompt templates used by the `/api/soccer/ai-coach` bridge handler. These are stored in the app's document directory and can be customized per team.
+**Purpose:** On-device prompt templates used by the `/api/soccer/ai-coach` bridge handler. These are stored in the app's document directory and can be customized per team. The prompt is sent to the bundled QVAC on-device model (`LLAMA_3_2_1B_INST_Q4_0`) for inference; if the model is not loaded, a local rule-based fallback is returned.
 
 ## Coach Template
 You are a tactical soccer coach assistant. Your task is to analyze match data in JSON format for the current 1-minute interval. The data includes fields like "timestamp," "type" (e.g., "Pass," "Shot"), "possession_team," "player," "position," "location," and event details. Based solely on this data, generate actionable insights and predict the next most effective move to help the team win.

@@ -8,13 +8,15 @@ This document maps what the integration markdowns recommend against what the cur
 
 | Feature | Endpoint | Status |
 |---------|----------|--------|
-| AI coach analysis (LLM or local fallback) | `POST /api/soccer/ai-coach` | Ready — uses remote LLM when configured, falls back to local event analysis |
-| AI coaching chat with memory | `POST /api/soccer/ai-chat` | Ready — uses TDAI memory and remote LLM when configured |
+| On-device AI coach analysis | `POST /api/soccer/ai-coach` | Ready — uses the bundled QVAC model; falls back to local event analysis |
+| On-device AI coaching chat with memory | `POST /api/soccer/ai-chat` | Ready — uses the bundled QVAC model + TDAI memory |
 | Chart-ready visualization data | `POST /api/soccer/visualize` | Ready — returns structured data for event summary, shot map, passing network, xG timeline |
 | Reference markdowns by topic | `GET /api/soccer/reference` | Ready — reads bundled or imported markdown files |
 | Import CSV/JSON notebook outputs | `POST /api/soccer/import` | Ready — parses CSV/JSON and creates wiki pages |
-| Configure LLM provider | `POST/GET /api/soccer/llm-config` | Ready — stores OpenAI-compatible endpoint + API key |
+| Check QVAC model status | `POST/GET /api/soccer/llm-config` | Ready — read-only status of the bundled model |
 | Create/edit soccer wiki pages from templates | Wiki file system | Ready |
+
+**Note:** Users cannot load custom models. The app ships with one QVAC model (`LLAMA_3_2_1B_INST_Q4_0`).
 
 ## Out of Scope
 
@@ -24,10 +26,10 @@ This document maps what the integration markdowns recommend against what the cur
 
 ## Remaining Production Considerations
 
-### 1. LLM Requires User Configuration
+### 1. On-Device LLM is the Bundled QVAC Model
 - **Recommendation:** AI coach templates and chat expect LLM-generated insights.
-- **Current state:** The app calls a remote OpenAI-compatible endpoint only after the user configures `provider`, `baseUrl`, `apiKey`, and `model` via `/api/soccer/llm-config`.
-- **Action required:** UI must expose the LLM config screen.
+- **Current state:** The app loads the single QVAC model (`LLAMA_3_2_1B_INST_Q4_0`) at startup. Soccer endpoints call `completion()` from `@qvac/sdk` when the model is available; otherwise they return local fallbacks.
+- **Action required:** None for inference. UI can show `modelStatus` to indicate loading/ready/error.
 
 ### 2. Visualizations Need a Frontend Charting Library
 - **Recommendation:** Dashboard and xG templates reference charts and visualizations.
@@ -41,7 +43,7 @@ This document maps what the integration markdowns recommend against what the cur
 ## Dependencies Used for Production Features
 
 - File system, memory, bridge: `expo-file-system`, React Native WebView bridge
-- LLM: standard `fetch` to OpenAI-compatible `/chat/completions` endpoint
+- On-device LLM: `@qvac/sdk` (loads and runs the bundled `LLAMA_3_2_1B_INST_Q4_0` model)
 - Charts: frontend-only (not in `package.json` yet; to be chosen by frontend implementer)
 - Data import: built-in `JSON.parse` + simple CSV parser in `handleSoccerImport`
 
@@ -49,4 +51,4 @@ This document maps what the integration markdowns recommend against what the cur
 
 - Add `expo-document-picker` for selecting CSV/JSON files from device storage.
 - Add a frontend charting dependency and wire `/api/soccer/visualize` responses to chart components.
-- Add a UI form for `/api/soccer/llm-config` so users can enter API keys securely.
+- Show QVAC loading progress (`qvacModelProgress`) in the UI.

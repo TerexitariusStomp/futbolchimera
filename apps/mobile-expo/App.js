@@ -57,6 +57,7 @@ export default function App() {
   const pearWorkletRef = useRef(null);
   const pearPendingRef = useRef(new Map());
   const pearReqIdRef = useRef(0);
+  const qvacModelIdRef = useRef(null);
 
   useEffect(() => {
     async function init() {
@@ -85,6 +86,7 @@ export default function App() {
               setQvacModelProgress(progress);
             },
           });
+          qvacModelIdRef.current = modelId;
           setQvacModelId(modelId);
           setQvacAvailable(true);
           setModelStatus('ready');
@@ -196,7 +198,7 @@ export default function App() {
   }, []);
 
   async function handleAIWrite(body) {
-    if (!qvacAvailable || !qvacModelId) {
+    if (!qvacAvailable || !qvacModelIdRef.current) {
       return {
         success: false,
         error: 'On-device QVAC AI is not available in this build.',
@@ -205,7 +207,7 @@ export default function App() {
     try {
       const { completion } = await import('@qvac/sdk');
       const history = [{ role: 'user', content: body?.prompt || '' }];
-      const result = completion({ modelId: qvacModelId, history, stream: false });
+      const result = completion({ modelId: qvacModelIdRef.current, history, stream: false });
       let text = '';
       if (result && typeof result.text === 'object' && result.text !== null && typeof result.text.then === 'function') {
         text = await result.text;
@@ -237,7 +239,7 @@ export default function App() {
       data: {
         available: qvacAvailable,
         qvacAvailable,
-        model: qvacModelId ? 'LLAMA_3_2_1B_INST_Q4_0' : null,
+        model: qvacModelIdRef.current ? 'LLAMA_3_2_1B_INST_Q4_0' : null,
         modelLoading: qvacModelLoading,
         modelProgress: qvacModelProgress,
       },
@@ -898,74 +900,44 @@ export default function App() {
   }
 
   // ============================
-  // Production LLM Configuration
+  // On-Device LLM (QVAC)
   // ============================
 
-  const LLM_CONFIG_FILE = SOCCER_DIR + 'llm_config.json';
-
-  async function getLlmConfig() {
-    try {
-      const raw = await FileSystem.readAsStringAsync(LLM_CONFIG_FILE);
-      return JSON.parse(raw);
-    } catch (e) {
-      return {
-        provider: 'openai',
-        baseUrl: 'https://api.openai.com/v1',
-        apiKey: null,
-        model: 'gpt-4o-mini',
-        enabled: false,
-      };
-    }
-  }
-
-  async function handleSoccerLlmConfig(body) {
-    try {
-      await initSoccerDirs();
-      if (!body) {
-        const config = await getLlmConfig();
-        return { success: true, config };
-      }
-      const config = {
-        provider: body.provider || 'openai',
-        baseUrl: body.baseUrl || 'https://api.openai.com/v1',
-        apiKey: body.apiKey || null,
-        model: body.model || 'gpt-4o-mini',
-        enabled: !!body.apiKey,
-      };
-      await FileSystem.writeAsStringAsync(LLM_CONFIG_FILE, JSON.stringify(config));
-      return { success: true, config };
-    } catch (e) {
-      return { success: false, error: e.message };
-    }
-  }
-
-  async function callRemoteLlm(messages, config) {
-    const url = config.baseUrl.replace(/\/$/, '') + '/chat/completions';
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + config.apiKey,
+  async function handleSoccerLlmConfig() {
+    return {
+      success: true,
+      config: {
+        provider: 'qvac',
+        model: qvacModelIdRef.current ? 'LLAMA_3_2_1B_INST_Q4_0' : null,
+        loaded: qvacModelIdRef.current !== null,
       },
-      body: JSON.stringify({
-        model: config.model,
-        messages,
-        temperature: 0.7,
-      }),
-    });
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error('LLM API error ' + res.status + ': ' + text);
+    };
+  }
+
+  async function callQvacLlm(messages) {
+    if (!qvacModelIdRef.current) {
+      throw new Error('QVAC model not loaded');
     }
-    const data = await res.json();
-    return data.choices?.[0]?.message?.content || '';
+    const { completion } = await import('@qvac/sdk');
+    const history = messages.filter(m => m.role === 'user' || m.role === 'assistant').map(m => ({ role: m.role, content: m.content }));
+    const result = completion({ modelId: qvacModelIdRef.current, history, stream: false });
+    if (result && typeof result.text === 'object' && result.text !== null && typeof result.text.then === 'function') {
+      return await result.text;
+    }
+    if (result && typeof result.tokenStream === 'object' && result.tokenStream !== null && typeof result.tokenStream[Symbol.asyncIterator] === 'function') {
+      let text = '';
+      for await (const token of result.tokenStream) {
+        text += token;
+      }
+      return text;
+    }
+    return String(result || '');
   }
 
   async function handleSoccerAiCoach(body) {
     try {
       await initSoccerDirs();
 
-      const config = await getLlmConfig();
       const coachPromptPath = AI_COACH_PROMPTS_DIR + 'coach_template.txt';
       let coachTemplate = '';
       try {
@@ -977,13 +949,13 @@ export default function App() {
 
       const prompt = coachTemplate.replace('{data}', JSON.stringify(body.events || []));
 
-      if (config.enabled) {
+      if (qvacModelIdRef.current) {
         const messages = [
           { role: 'system', content: 'You are an expert soccer coach assistant.' },
           { role: 'user', content: prompt }
         ];
-        const insight = await callRemoteLlm(messages, config);
-        return { success: true, insight, source: 'llm' };
+        const insight = await callQvacLlm(messages);
+        return { success: true, insight, source: 'qvac' };
       }
 
       const insight = generateLocalInsight(body.events, body.role || 'coach');
@@ -1001,18 +973,17 @@ export default function App() {
         session_key: 'soccer-coach'
       });
 
-      const config = await getLlmConfig();
       let response;
-      if (config.enabled) {
+      if (qvacModelIdRef.current) {
         const history = await getTdaiSessionRecords('soccer-coach', 6);
         const messages = [
           { role: 'system', content: 'You are a helpful soccer coach assistant for tactical analysis, player evaluation, and match planning.' },
           ...history,
           { role: 'user', content: body.message }
         ];
-        response = await callRemoteLlm(messages, config);
+        response = await callQvacLlm(messages);
       } else {
-        response = `I understand you're asking about: "${body.message}". As your soccer coach assistant, I can help with tactical analysis, player evaluations, and match planning. Configure an LLM API key for full AI responses.`;
+        response = `I understand you're asking about: "${body.message}". As your soccer coach assistant, I can help with tactical analysis, player evaluations, and match planning. QVAC model is not loaded.`;
       }
 
       await handleTdaiCapture({
@@ -1021,7 +992,7 @@ export default function App() {
         session_key: 'soccer-coach'
       });
 
-      return { success: true, response, source: config.enabled ? 'llm' : 'local' };
+      return { success: true, response, source: qvacModelIdRef.current ? 'qvac' : 'local' };
     } catch (e) {
       return { success: false, error: e.message };
     }

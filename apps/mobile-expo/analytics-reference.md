@@ -28,12 +28,14 @@ This file is the high-level index. Detailed concepts, data sources, and per-repo
 
 | Endpoint | Capability | Requirements |
 |----------|-----------|--------------|
-| `POST /api/soccer/ai-coach` | LLM-powered tactical analysis | Configure LLM via `/api/soccer/llm-config` |
-| `POST /api/soccer/ai-chat` | Context-aware coaching chat | LLM config + TDAI memory |
+| `POST /api/soccer/ai-coach` | On-device QVAC tactical analysis | QVAC model loaded at app start |
+| `POST /api/soccer/ai-chat` | Context-aware on-device coaching chat | QVAC model loaded + TDAI memory |
 | `POST /api/soccer/visualize` | Chart-ready data (event summary, shot map, passing network, xG timeline) | Frontend charting library |
 | `GET /api/soccer/reference` | Read reference markdowns | Reference files in `apps/mobile-expo/` |
 | `POST /api/soccer/import` | Import CSV/JSON notebook outputs into wiki pages | Data pasted/imported as text |
-| `POST/GET /api/soccer/llm-config` | Configure remote LLM provider and model | API key for OpenAI-compatible endpoint |
+| `POST/GET /api/soccer/llm-config` | Read QVAC model status | — |
+
+**Note:** The app uses the single bundled QVAC model (`LLAMA_3_2_1B_INST_Q4_0`). Users cannot load custom models.
 
 ## Wiki Templates
 
