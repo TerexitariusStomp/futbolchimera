@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FutbolChimera — Soccer AI on Your Phone</title>
+  <meta name="description" content="FutbolChimera brings AI coaching, analytics, and computer vision to iOS and Android for soccer teams and players." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet" />
+  <link rel="icon" href="logo.png" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="site-header">
+    <nav class="nav container">
+      <a href="#" class="logo">
+        <img src="logo.png" alt="FutbolChimera logo" />
+        <span>FutbolChimera</span>
+      </a>
+      <ul class="nav-links">
+        <li><a href="#features">Features</a></li>
+        <li><a href="#apps">Apps</a></li>
+        <li><a href="#resources">Resources</a></li>
+        <li><a href="#templates">Templates</a></li>
+        <li><a href="#build">Build</a></li>
+      </ul>
+      <a class="cta-small" href="https://github.com/terexitariusstomp/futbolchimera" target="_blank" rel="noopener">GitHub</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="hero-bg"></div>
+      <div class="container hero-grid">
+        <div class="hero-content">
+          <div class="badge">Chimera Mobile &middot; iOS + Android</div>
+          <h1>Soccer intelligence, <span class="gradient-text">on-device</span>.</h1>
+          <p class="lead">
+            FutbolChimera is the mobile home of Chimera: AI coaching, match analytics, computer vision, and P2P team sync for iOS and Android.
+          </p>
+          <div class="hero-actions">
+            <a class="btn btn-primary" href="#apps">Explore the apps</a>
+            <a class="btn btn-outline" href="https://github.com/terexitariusstomp/futbolchimera" target="_blank" rel="noopener">View on GitHub</a>
+          </div>
+        </div>
+        <div class="hero-visual">
+          <img src="logo.png" alt="FutbolChimera chimera mascot with soccer ball" />
+          <div class="glow"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="features" class="features">
+      <div class="container">
+        <div class="section-head">
+          <h2>Built for the pitch</h2>
+          <p>Every feature is designed to give players, coaches, and analysts an edge.</p>
+        </div>
+        <div class="feature-grid">
+          <article class="feature-card">
+            <div class="icon">⚽</div>
+            <h3>AI Coach</h3>
+            <p>Ask tactical questions, get minute-by-minute analysis, and receive substitution recommendations powered by local soccer prompts.</p>
+          </article>
+          <article class="feature-card">
+            <div class="icon">📊</div>
+            <h3>Analytics Reference</h3>
+            <p>xG, passing networks, pitch control, heat maps, and shot maps — all grounded in the analytics-handbook concepts.</p>
+          </article>
+          <article class="feature-card">
+            <div class="icon">👁️</div>
+            <h3>Computer Vision</h3>
+            <p>On-device player and ball detection, jersey-number OCR, and pitch keypoints via Roboflow Sports models.</p>
+          </article>
+          <article class="feature-card">
+            <div class="icon">🔗</div>
+            <h3>P2P Swarming</h3>
+            <p>Create or join a Pear/Hyperswarm network to sync wiki pages, match notes, and tactics directly between phones.</p>
+          </article>
+          <article class="feature-card">
+            <div class="icon">📱</div>
+            <h3>Cross-platform</h3>
+            <p>Native iOS and Android builds from a single Expo React Native codebase, plus a legacy Capacitor app.</p>
+          </article>
+          <article class="feature-card">
+            <div class="icon">🧠</div>
+            <h3>On-device AI</h3>
+            <p>Run inference locally with QVAC/BareKit integration, or fall back to cloud APIs when models are unavailable.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="apps" class="apps">
+      <div class="container">
+        <div class="section-head light">
+          <h2>Two codebases, one goal</h2>
+          <p>Choose the stack that fits your workflow.</p>
+        </div>
+        <div class="app-grid">
+          <div class="app-card">
+            <div class="app-meta">
+              <span class="tag">Current</span>
+              <h3>mobile-expo</h3>
+              <p>The active Chimera mobile app. React Native + Expo, WebView-wrapped shared frontend, native file-system bridge, and soccer AI endpoints.</p>
+              <ul>
+                <li>Expo SDK 52 / React Native 0.76</li>
+                <li>Adaptive icons & splash screens</li>
+                <li>WalletConnect / Privy deep-link auth</li>
+                <li>iOS bundle: <code>io.chimera.mobile</code></li>
+              </ul>
+            </div>
+            <a class="btn btn-primary" href="https://github.com/terexitariusstomp/futbolchimera/tree/main/apps/mobile-expo" target="_blank" rel="noopener">Browse code</a>
+          </div>
+          <div class="app-card">
+            <div class="app-meta">
+              <span class="tag alt">Legacy</span>
+              <h3>mobile</h3>
+              <p>The original Capacitor-wrapped mobile app. Kept for reference and historical continuity as a standalone Chimera node.</p>
+              <ul>
+                <li>Capacitor + native iOS/Android</li>
+                <li>Stand-alone node architecture</li>
+                <li>Planned Store submissions</li>
+              </ul>
+            </div>
+            <a class="btn btn-outline" href="https://github.com/terexitariusstomp/futbolchimera/tree/main/apps/mobile" target="_blank" rel="noopener">Browse code</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="resources" class="resources">
+      <div class="container">
+        <div class="section-head">
+          <h2>Soccer knowledge, included</h2>
+          <p>External submodules bring proven analytics and coaching libraries into the project.</p>
+        </div>
+        <div class="resource-grid">
+          <a class="resource-card" href="https://github.com/AkramOM606/AI-SoccerCoach" target="_blank" rel="noopener">
+            <h4>AI-SoccerCoach</h4>
+            <p>AI coaching assistant for tactical analysis and player development.</p>
+          </a>
+          <a class="resource-card" href="https://github.com/devinpleuler/analytics-handbook" target="_blank" rel="noopener">
+            <h4>analytics-handbook</h4>
+            <p>Core soccer analytics concepts: xG, passing networks, pitch control, and visualization.</p>
+          </a>
+          <a class="resource-card" href="https://github.com/ricardoherediaj/football-analytics-tutorials" target="_blank" rel="noopener">
+            <h4>football-analytics-tutorials</h4>
+            <p>Educational notebooks and tutorials for football data science.</p>
+          </a>
+          <a class="resource-card" href="https://github.com/roboflow/sports" target="_blank" rel="noopener">
+            <h4>roboflow-sports</h4>
+            <p>Computer vision models for player tracking, ball detection, and sports analysis.</p>
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <section id="templates" class="templates">
+      <div class="container">
+        <div class="section-head light">
+          <h2>Template library</h2>
+          <p>Structured markdown templates that the AI coach and analytics features fill in automatically.</p>
+        </div>
+        <div class="template-grid">
+          <div class="template-card">
+            <h4>Match Analysis</h4>
+            <p>Pre-match notes, half-by-half observations, AI insights, and post-match takeaways.</p>
+          </div>
+          <div class="template-card">
+            <h4>Player Evaluation</h4>
+            <p>Technical, physical, and mental ratings with development goals and training recommendations.</p>
+          </div>
+          <div class="template-card">
+            <h4>Tactical Plan</h4>
+            <p>Formation diagrams, attacking/defensive strategy, set pieces, and substitution strategy.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="build" class="build">
+      <div class="container">
+        <div class="section-head">
+          <h2>Build it yourself</h2>
+          <p>Clone the repo, install dependencies, and run the Expo app locally.</p>
+        </div>
+        <div class="code-window">
+          <div class="code-header">
+            <span class="dot"></span>
+            <span class="dot"></span>
+            <span class="dot"></span>
+            <span>terminal</span>
+          </div>
+          <pre><code>git clone --recursive https://github.com/terexitariusstomp/futbolchimera.git
+cd futbolchimera/apps/mobile-expo
+npm install
+npx expo start
+
+# Android
+npx expo prebuild --platform android --clean
+cd android && ./gradlew assembleRelease
+
+# iOS
+npx expo prebuild --platform ios --clean
+npx expo run:ios</code></pre>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-grid">
+      <div>
+        <a href="#" class="logo">
+          <img src="logo.png" alt="FutbolChimera logo" />
+          <span>FutbolChimera</span>
+        </a>
+        <p>Extracted from <a href="https://github.com/LocalChimera/localchimera" target="_blank" rel="noopener">localchimera</a> and maintained for mobile soccer AI.</p>
+      </div>
+      <div class="footer-links">
+        <a href="https://github.com/terexitariusstomp/futbolchimera" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://new.localchimera.com" target="_blank" rel="noopener">Chimera</a>
+        <a href="mailto:hello@localchimera.com">Contact</a>
+      </div>
+    </div>
+    <div class="container copyright">
+      <p>&copy; 2026 FutbolChimera. All rights reserved.</p>
+    </div>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>
