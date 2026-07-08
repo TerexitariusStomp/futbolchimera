@@ -7,3 +7,9 @@
 [submodule "external/analytics-handbook"]
 	path = external/analytics-handbook
 	url = https://github.com/devinpleuler/analytics-handbook.git
+[submodule "external/football-analytics-tutorials"]
+	path = external/football-analytics-tutorials
+	url = https://github.com/ricardoherediaj/football-analytics-tutorials.git
+[submodule "external/football-analytics"]
+	path = external/football-analytics
+	url = https://github.com/eddwebster/football_analytics.git

@@ -33,6 +33,35 @@ Free event data and tracking data available for research.
 ### Metrica Sports
 Open source tracking and event data for educational purposes.
 
+### FBref
+Comprehensive football statistics and aggregated match data.
+
+### Transfermarkt
+Player market values, transfers, and squad data.
+
+### Opta
+Detailed event data provider used across professional football analytics.
+
+### Wyscout
+Scouting and match analysis data platform.
+
+## Integrated Repositories
+
+### eddwebster/football_analytics
+Curated collection of football analytics projects, data sources, notebooks, dashboards, and resources. Useful for discovering libraries, datasets, and community projects.
+
+### ricardoherediaj/football-analytics-tutorials
+Open-source tutorials and code snippets covering match event data, xG, xT, interactive dashboards, and web scraping.
+
+### devinpleuler/analytics-handbook
+Soccer analytics handbook with tutorials using StatsBomb open data and libraries like mplsoccer, kloppy, and statsbombpy.
+
+### AkramOM606/AI-SoccerCoach
+Generative AI assistant for soccer coaching using match data and tactical prompts.
+
+### roboflow/sports
+Computer vision models and tools for sports analytics, including player/ball detection and pitch keypoints.
+
 ## Visualization Techniques
 
 ### Heat Maps
