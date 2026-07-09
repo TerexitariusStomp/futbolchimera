@@ -155,7 +155,29 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             -H "Content-Type: application/zip" \
             "https://uploads.github.com/repos/${{ github.repository }}/releases/$RELEASE_ID/assets?name=Chimera.app.zip" \
-            --input Chimera.app.zip
+            --input Chimera.app.zip > release-upload.log 2>&1
+          EXIT=$?
+          echo "Upload output:"
+          cat release-upload.log
           echo "Download URL: https://github.com/${{ github.repository }}/releases/download/$TAG/Chimera.app.zip"
+          if [ $EXIT -ne 0 ]; then
+            echo "Asset upload failed"
+            exit $EXIT
+          fi
           echo "### iOS Build Download" >> $GITHUB_STEP_SUMMARY
           echo "Download URL: https://github.com/${{ github.repository }}/releases/download/$TAG/Chimera.app.zip" >> $GITHUB_STEP_SUMMARY
+
+      - name: Commit release upload debug on failure
+        if: failure()
+        run: |
+          git config user.email "ci@example.com"
+          git config user.name "GitHub Actions CI"
+          git checkout --orphan ci-debug || git checkout ci-debug
+          for f in release-upload.log release-debug.log; do
+            if [ -f apps/mobile-expo/ios/$f ]; then
+              cp apps/mobile-expo/ios/$f $f
+              git add $f
+            fi
+          done
+          git commit -m "CI release upload debug" || true
+          git push origin ci-debug
