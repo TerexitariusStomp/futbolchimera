@@ -136,30 +136,15 @@ jobs:
 
       - name: Create GitHub Release with .app.zip
         if: success()
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           cd apps/mobile-expo/ios
-          echo "=== gh version ===" && gh --version
-          echo "=== gh auth status ===" && gh auth status || true
-          echo "=== Creating release ==="
           TAG="ios-build-${{ github.run_number }}-${{ github.run_attempt }}"
-          {
-            gh release create "$TAG" Chimera.app.zip \
-              --title "iOS Simulator Build $TAG" \
-              --notes "iOS simulator .app for Appetize" \
-              --repo ${{ github.repository }} \
-              --target ${{ github.sha }}
-          } 2>&1 | tee release-output.log
-          EXIT_CODE=${PIPESTATUS[0]}
-          echo "### Release Output" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          cat release-output.log >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          if [ $EXIT_CODE -ne 0 ]; then
-            echo "Release creation failed with exit code $EXIT_CODE"
-            exit 1
-          fi
+          echo "Creating release $TAG"
+          gh release create "$TAG" \
+            --title "iOS Simulator Build $TAG" \
+            --notes "iOS simulator .app for Appetize"
+          echo "Uploading asset to $TAG"
+          gh release upload "$TAG" Chimera.app.zip --clobber
           echo "Download URL: https://github.com/${{ github.repository }}/releases/download/$TAG/Chimera.app.zip"
           echo "### iOS Build Download" >> $GITHUB_STEP_SUMMARY
           echo "Download URL: https://github.com/${{ github.repository }}/releases/download/$TAG/Chimera.app.zip" >> $GITHUB_STEP_SUMMARY
