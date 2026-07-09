@@ -13,8 +13,7 @@ jobs:
   build-ios:
     runs-on: macos-latest
     timeout-minutes: 120
-    permissions:
-      contents: write
+    permissions: write-all
 
     steps:
       - name: Checkout repo
