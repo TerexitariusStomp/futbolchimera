@@ -104,15 +104,12 @@ jobs:
           name: Chimera-ios-app
           path: apps/mobile-expo/ios/Chimera.app.zip
 
-      - name: Commit .app.zip to ios-builds branch (Git LFS)
+      - name: Upload .app.zip to transfer.sh
         if: success()
+        working-directory: apps/mobile-expo/ios
         run: |
-          git config user.email "ci@example.com"
-          git config user.name "GitHub Actions CI"
-          git lfs track "*.app.zip"
-          git fetch origin ios-builds || true
-          git checkout -B ios-builds
-          cp apps/mobile-expo/ios/Chimera.app.zip Chimera.app.zip
-          git add .gitattributes Chimera.app.zip
-          git commit -m "iOS simulator build ${{ github.run_number }}" || true
-          git push origin ios-builds
+          echo "Uploading Chimera.app.zip to transfer.sh..."
+          UPLOAD_URL=$(curl --progress-bar --upload-file Chimera.app.zip https://transfer.sh/Chimera.app.zip)
+          echo "Download URL: $UPLOAD_URL"
+          echo "### iOS Build Download" >> $GITHUB_STEP_SUMMARY
+          echo "Download URL: $UPLOAD_URL" >> $GITHUB_STEP_SUMMARY
