@@ -136,15 +136,19 @@ jobs:
 
       - name: Create GitHub Release with .app.zip
         if: success()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           cd apps/mobile-expo/ios
+          echo "=== gh version ===" && gh --version
+          echo "=== gh auth ===" && (echo "$GITHUB_TOKEN" | gh auth login --with-token --hostname github.com) && gh auth status
           TAG="ios-build-${{ github.run_number }}-${{ github.run_attempt }}"
           echo "Creating release $TAG"
           gh release create "$TAG" \
             --title "iOS Simulator Build $TAG" \
-            --notes "iOS simulator .app for Appetize"
+            --notes "iOS simulator .app for Appetize" 2>&1 | tee release-output.log
           echo "Uploading asset to $TAG"
-          gh release upload "$TAG" Chimera.app.zip --clobber
+          gh release upload "$TAG" Chimera.app.zip --clobber 2>&1 | tee -a release-output.log
           echo "Download URL: https://github.com/${{ github.repository }}/releases/download/$TAG/Chimera.app.zip"
           echo "### iOS Build Download" >> $GITHUB_STEP_SUMMARY
           echo "Download URL: https://github.com/${{ github.repository }}/releases/download/$TAG/Chimera.app.zip" >> $GITHUB_STEP_SUMMARY
