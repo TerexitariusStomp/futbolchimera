@@ -73,24 +73,25 @@ jobs:
       - name: Package .app for Appetize
         working-directory: apps/mobile-expo/ios
         run: |
-          echo "=== Searching for any .app bundle ==="
-          find ./DerivedData -name "*.app" -type d
+          set -x
+          echo "=== Searching for any .app bundle ===" | tee package.log
+          find ./DerivedData -name "*.app" -type d | tee -a package.log
           APP_PATH=$(find ./DerivedData -name "*.app" -type d | head -n 1)
           if [ -z "$APP_PATH" ]; then
-            echo "=== DerivedData structure ==="
-            find ./DerivedData -maxdepth 5 -type d | sort
-            echo "ERROR: No .app bundle found"
-            {
-              echo "### Package .app failed"
-              echo "No .app bundle found in DerivedData. Structure:"
-              echo '```'
-              find ./DerivedData -maxdepth 5 -type d | sort
-              echo '```'
-            } >> $GITHUB_STEP_SUMMARY
+            echo "=== DerivedData structure ===" | tee -a package.log
+            find ./DerivedData -maxdepth 5 -type d | sort | tee -a package.log
+            echo "ERROR: No .app bundle found" | tee -a package.log
             exit 1
           fi
-          echo "Found app at: $APP_PATH"
-          zip -r Chimera.app.zip "$APP_PATH"
+          echo "Found app at: $APP_PATH" | tee -a package.log
+          zip -r Chimera.app.zip "$APP_PATH" 2>&1 | tee -a package.log
+
+      - name: Upload package log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-log
+          path: apps/mobile-expo/ios/package.log
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
