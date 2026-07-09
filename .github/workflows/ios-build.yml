@@ -135,8 +135,11 @@ jobs:
 
       - name: Create GitHub Release with .app.zip
         if: success()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           cd apps/mobile-expo/ios
+          echo "$GITHUB_TOKEN" | gh auth login --with-token --hostname github.com
           TAG="ios-build-${{ github.run_number }}-${{ github.run_attempt }}-${{ github.run_id }}"
           echo "Creating release $TAG"
           gh release create "$TAG" \
