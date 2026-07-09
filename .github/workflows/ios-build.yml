@@ -46,6 +46,10 @@ jobs:
             exit 1
           }
 
+      - name: List Xcode schemes
+        working-directory: apps/mobile-expo/ios
+        run: xcodebuild -list
+
       - name: Build iOS simulator app
         working-directory: apps/mobile-expo/ios
         run: |
@@ -57,7 +61,14 @@ jobs:
             -derivedDataPath ./DerivedData \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO
+            CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tee xcodebuild.log || {
+              echo "### xcodebuild failed" >> $GITHUB_STEP_SUMMARY
+              echo '```' >> $GITHUB_STEP_SUMMARY
+              tail -n 300 xcodebuild.log >> $GITHUB_STEP_SUMMARY
+              echo '```' >> $GITHUB_STEP_SUMMARY
+              exit 1
+            }
 
       - name: Package .app for Appetize
         working-directory: apps/mobile-expo/ios
