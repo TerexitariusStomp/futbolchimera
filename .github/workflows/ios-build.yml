@@ -1,0 +1,54 @@
+name: iOS Simulator Build
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  build-ios:
+    runs-on: macos-latest
+    timeout-minutes: 40
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        working-directory: apps/mobile-expo
+        run: npm install
+
+      - name: Prebuild iOS
+        working-directory: apps/mobile-expo
+        run: npx expo prebuild --platform ios
+
+      - name: Build iOS simulator app
+        working-directory: apps/mobile-expo/ios
+        run: |
+          xcodebuild \
+            -workspace Chimera.xcworkspace \
+            -scheme Chimera \
+            -sdk iphonesimulator \
+            -configuration Release \
+            -derivedDataPath ./DerivedData \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Package .app for Appetize
+        working-directory: apps/mobile-expo/ios
+        run: |
+          APP_PATH=$(find ./DerivedData/Build/Products -name "Chimera.app" -type d | head -n 1)
+          echo "Found app at: $APP_PATH"
+          zip -r Chimera.app.zip "$APP_PATH"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Chimera-ios-app
+          path: apps/mobile-expo/ios/Chimera.app.zip

@@ -6,6 +6,7 @@
     "orientation": "portrait",
     "icon": "./assets/splash.png",
     "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
@@ -36,8 +37,9 @@
     },
     "plugins": [
       "./plugins/withIosFrontendResources.js",
+      "./plugins/withIosLinkerFix.js",
       "expo-bare-kit",
-      "@qvac/sdk",
+      "./plugins/generated/qvac-sdk-plugin.cjs",
       [
         "expo-build-properties",
         {
@@ -46,10 +48,11 @@
             "ndkVersion": "27.2.12479018",
             "enableProguardInReleaseBuilds": true,
             "enableShrinkResourcesInReleaseBuilds": true,
-            "enableMinifyInReleaseBuilds": true
+            "enableMinifyInReleaseBuilds": true,
+            "newArchEnabled": true
           },
           "ios": {
-            "newArchEnabled": false
+            "newArchEnabled": true
           }
         }
       ]
