@@ -158,12 +158,14 @@ jobs:
             exit 1
           fi
           echo "Uploading asset to $UPLOAD_URL?name=Chimera.app.zip"
-          curl -s -X POST \
+          curl -v -X POST \
             -H "Authorization: Bearer $GITHUB_TOKEN" \
             -H "Accept: application/vnd.github+json" \
             -H "Content-Type: application/zip" \
             --data-binary @Chimera.app.zip \
-            "$UPLOAD_URL?name=Chimera.app.zip" > upload-response.json
+            "$UPLOAD_URL?name=Chimera.app.zip" > upload-response.json 2> upload-verbose.log
+          echo "HTTP status and verbose output:"
+          tail -c 50000 upload-verbose.log
           cat upload-response.json
           echo "Download URL: https://github.com/$OWNER/$REPO/releases/download/$TAG/Chimera.app.zip"
           echo "### iOS Build Download" >> $GITHUB_STEP_SUMMARY
@@ -175,9 +177,11 @@ jobs:
           git config user.email "ci@example.com"
           git config user.name "GitHub Actions CI"
           git checkout --orphan ci-debug || git checkout ci-debug
-          if [ -f apps/mobile-expo/ios/upload-response.json ]; then
-            cp apps/mobile-expo/ios/upload-response.json upload-response.json
-            git add upload-response.json
-          fi
+          for f in upload-response.json upload-verbose.log; do
+            if [ -f apps/mobile-expo/ios/$f ]; then
+              cp apps/mobile-expo/ios/$f $f
+              git add $f
+            fi
+          done
           git commit -m "CI release upload debug" || true
           git push origin ci-debug
