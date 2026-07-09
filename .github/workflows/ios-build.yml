@@ -158,12 +158,26 @@ jobs:
             exit 1
           fi
           echo "Uploading asset to $UPLOAD_URL?name=Chimera.app.zip"
-          curl -X POST \
+          curl -s -X POST \
             -H "Authorization: Bearer $GITHUB_TOKEN" \
             -H "Accept: application/vnd.github+json" \
             -H "Content-Type: application/zip" \
             --data-binary @Chimera.app.zip \
-            "$UPLOAD_URL?name=Chimera.app.zip"
+            "$UPLOAD_URL?name=Chimera.app.zip" > upload-response.json
+          cat upload-response.json
           echo "Download URL: https://github.com/$OWNER/$REPO/releases/download/$TAG/Chimera.app.zip"
           echo "### iOS Build Download" >> $GITHUB_STEP_SUMMARY
           echo "Download URL: https://github.com/$OWNER/$REPO/releases/download/$TAG/Chimera.app.zip" >> $GITHUB_STEP_SUMMARY
+
+      - name: Commit release debug output on failure
+        if: failure()
+        run: |
+          git config user.email "ci@example.com"
+          git config user.name "GitHub Actions CI"
+          git checkout --orphan ci-debug || git checkout ci-debug
+          if [ -f apps/mobile-expo/ios/upload-response.json ]; then
+            cp apps/mobile-expo/ios/upload-response.json upload-response.json
+            git add upload-response.json
+          fi
+          git commit -m "CI release upload debug" || true
+          git push origin ci-debug
