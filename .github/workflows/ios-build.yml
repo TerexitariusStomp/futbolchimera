@@ -148,7 +148,14 @@ jobs:
             --notes "iOS simulator .app for Appetize" \
             --repo ${{ github.repository }}
           echo "Uploading asset to $TAG"
-          gh release upload "$TAG" Chimera.app.zip --clobber
+          RELEASE_ID=$(gh api "repos/${{ github.repository }}/releases/tags/$TAG" --jq '.id')
+          echo "Release ID: $RELEASE_ID"
+          gh api \
+            --method POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Content-Type: application/zip" \
+            "https://uploads.github.com/repos/${{ github.repository }}/releases/$RELEASE_ID/assets?name=Chimera.app.zip" \
+            --input Chimera.app.zip
           echo "Download URL: https://github.com/${{ github.repository }}/releases/download/$TAG/Chimera.app.zip"
           echo "### iOS Build Download" >> $GITHUB_STEP_SUMMARY
           echo "Download URL: https://github.com/${{ github.repository }}/releases/download/$TAG/Chimera.app.zip" >> $GITHUB_STEP_SUMMARY
