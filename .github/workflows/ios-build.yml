@@ -21,7 +21,17 @@ jobs:
 
       - name: Install dependencies
         working-directory: apps/mobile-expo
-        run: npm install --no-save
+        run: |
+          set -x
+          node -v
+          npm -v
+          # Try normal install first; on failure run verbose install and capture log
+          npm install --no-save || {
+            echo "=== npm install failed, running verbose install ==="
+            npm install --no-save --verbose > npm-install.log 2>&1 || true
+            tail -n 200 npm-install.log
+            exit 1
+          }
 
       - name: Prebuild iOS
         working-directory: apps/mobile-expo
