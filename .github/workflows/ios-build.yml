@@ -1,0 +1,183 @@
+name: iOS Simulator Build
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-ios:
+    runs-on: macos-latest
+    timeout-minutes: 120
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Cache node_modules
+        uses: actions/cache@v4
+        with:
+          path: apps/mobile-expo/node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('apps/mobile-expo/package.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      - name: Install dependencies
+        working-directory: apps/mobile-expo
+        run: |
+          set -x
+          node -v
+          npm -v
+          # Use --ignore-scripts + --legacy-peer-deps to avoid @qvac/sdk peer dep conflict
+          npm install --no-save --ignore-scripts --legacy-peer-deps
+          node scripts/patch-bare-kit.js
+          node scripts/patch-qvac-sdk.js
+
+      - name: Cache CocoaPods
+        uses: actions/cache@v4
+        with:
+          path: |
+            apps/mobile-expo/ios/Pods
+            ~/Library/Developer/Xcode/DerivedData
+          key: ${{ runner.os }}-pods-${{ hashFiles('apps/mobile-expo/ios/Podfile.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pods-
+
+      - name: Check CocoaPods
+        run: |
+          which pod || echo "CocoaPods not found"
+          pod --version || true
+
+      - name: Prebuild iOS
+        working-directory: apps/mobile-expo
+        run: |
+          npx expo prebuild --platform ios --verbose 2>&1 | tee prebuild.log || {
+            echo "### expo prebuild failed" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            tail -n 200 prebuild.log >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            exit 1
+          }
+
+      - name: List Xcode schemes
+        working-directory: apps/mobile-expo/ios
+        run: xcodebuild -list
+
+      - name: Build iOS simulator app
+        working-directory: apps/mobile-expo/ios
+        run: |
+          xcodebuild \
+            -workspace Chimera.xcworkspace \
+            -scheme Chimera \
+            -sdk iphonesimulator \
+            -configuration Release \
+            -derivedDataPath ./DerivedData \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tee xcodebuild.log || {
+              echo "### xcodebuild failed" >> $GITHUB_STEP_SUMMARY
+              echo '```' >> $GITHUB_STEP_SUMMARY
+              tail -n 300 xcodebuild.log >> $GITHUB_STEP_SUMMARY
+              echo '```' >> $GITHUB_STEP_SUMMARY
+              exit 1
+            }
+
+      - name: Package .app for Appetize
+        id: package
+        working-directory: apps/mobile-expo/ios
+        run: |
+          set -x
+          APP_PATH="./DerivedData/Build/Products/Release-iphonesimulator/Chimera.app"
+          echo "Expected app path: $APP_PATH" | tee package-debug.log
+          ls -ld "$APP_PATH" | tee -a package-debug.log || {
+            echo "=== Searching for any .app bundle ===" | tee -a package-debug.log
+            find ./DerivedData -name "*.app" -type d | tee -a package-debug.log || true
+            echo "=== Build/Products contents ===" | tee -a package-debug.log
+            find ./DerivedData/Build/Products -maxdepth 3 -type d 2>/dev/null | sort | tee -a package-debug.log || true
+            echo "ERROR: Chimera.app not found at expected path" | tee -a package-debug.log
+            exit 1
+          }
+          zip -r Chimera.app.zip "$APP_PATH" 2>&1 | tee -a package-debug.log
+
+      - name: Commit debug log on failure
+        if: failure()
+        run: |
+          git config user.email "ci@example.com"
+          git config user.name "GitHub Actions CI"
+          git checkout --orphan ci-debug || git checkout ci-debug
+          if [ -f apps/mobile-expo/ios/package-debug.log ]; then
+            cp apps/mobile-expo/ios/package-debug.log package-debug.log
+            git add package-debug.log
+          fi
+          if [ -f apps/mobile-expo/ios/release-output.log ]; then
+            cp apps/mobile-expo/ios/release-output.log release-output.log
+            git add release-output.log
+          fi
+          git commit -m "CI debug logs" || true
+          git push origin ci-debug
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Chimera-ios-app
+          path: apps/mobile-expo/ios/Chimera.app.zip
+
+      - name: Create GitHub Release and upload .app.zip via API
+        if: success()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd apps/mobile-expo/ios
+          TAG="ios-build-${{ github.run_number }}-${{ github.run_attempt }}-${{ github.run_id }}"
+          OWNER="${{ github.repository_owner }}"
+          REPO="${{ github.event.repository.name }}"
+          REPO="${REPO:-$(basename ${{ github.repository }})}"
+          echo "Creating release $TAG"
+          RELEASE_JSON=$(curl -s -X POST \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "Content-Type: application/json" \
+            "https://api.github.com/repos/$OWNER/$REPO/releases" \
+            -d "{\"tag_name\":\"$TAG\",\"name\":\"iOS Simulator Build $TAG\",\"body\":\"iOS simulator .app for Appetize\"}")
+          echo "Release response: $RELEASE_JSON"
+          UPLOAD_URL=$(echo "$RELEASE_JSON" | python3 -c "import sys, json; d=json.load(sys.stdin); print(d.get('upload_url', '').replace('{?name,label}',''))")
+          if [ -z "$UPLOAD_URL" ]; then
+            echo "Failed to create release"
+            exit 1
+          fi
+          echo "Uploading asset to $UPLOAD_URL?name=Chimera.app.zip"
+          curl -s -X POST \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "Content-Type: application/zip" \
+            --data-binary @Chimera.app.zip \
+            "$UPLOAD_URL?name=Chimera.app.zip" > upload-response.json
+          cat upload-response.json
+          echo "Download URL: https://github.com/$OWNER/$REPO/releases/download/$TAG/Chimera.app.zip"
+          echo "### iOS Build Download" >> $GITHUB_STEP_SUMMARY
+          echo "Download URL: https://github.com/$OWNER/$REPO/releases/download/$TAG/Chimera.app.zip" >> $GITHUB_STEP_SUMMARY
+
+      - name: Commit release debug output on failure
+        if: failure()
+        run: |
+          git config user.email "ci@example.com"
+          git config user.name "GitHub Actions CI"
+          git checkout --orphan ci-debug || git checkout ci-debug
+          if [ -f apps/mobile-expo/ios/upload-response.json ]; then
+            cp apps/mobile-expo/ios/upload-response.json upload-response.json
+            git add upload-response.json
+          fi
+          git commit -m "CI release upload debug" || true
+          git push origin ci-debug

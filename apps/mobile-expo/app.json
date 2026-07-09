@@ -1,0 +1,71 @@
+{
+  "expo": {
+    "name": "Chimera",
+    "slug": "chimera-mobile",
+    "version": "1.0.22",
+    "orientation": "portrait",
+    "icon": "./assets/splash.png",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0a0a14"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "io.chimera.mobile",
+      "buildNumber": "1.0.22",
+      "infoPlist": {
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true,
+          "NSAllowsLocalNetworking": true
+        }
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/splash.png",
+        "backgroundColor": "#0a0a14"
+      },
+      "package": "io.chimera.mobile",
+      "versionCode": 10022,
+      "softwareKeyboardLayoutMode": "resize"
+    },
+    "plugins": [
+      "./plugins/withIosFrontendResources.js",
+      "./plugins/withIosLinkerFix.js",
+      "expo-bare-kit",
+      "./plugins/generated/qvac-sdk-plugin.cjs",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "minSdkVersion": 29,
+            "ndkVersion": "27.2.12479018",
+            "enableProguardInReleaseBuilds": true,
+            "enableShrinkResourcesInReleaseBuilds": true,
+            "enableMinifyInReleaseBuilds": true,
+            "newArchEnabled": true
+          },
+          "ios": {
+            "newArchEnabled": true
+          }
+        }
+      ]
+    ],
+    "extra": {
+      "qvac": {
+        "modelsDir": "models",
+        "defaultModel": "LLAMA_3_2_1B_INST_Q4_0"
+      },
+      "eas": {
+        "projectId": "85b071a5-0328-4772-ad14-ca5f17933e69"
+      }
+    },
+    "owner": "terexitarius"
+  }
+}
