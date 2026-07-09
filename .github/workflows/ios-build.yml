@@ -73,11 +73,20 @@ jobs:
       - name: Package .app for Appetize
         working-directory: apps/mobile-expo/ios
         run: |
-          echo "Searching for Chimera.app..."
+          echo "=== DerivedData structure ==="
+          find ./DerivedData -maxdepth 5 -type d | sort
+          echo "=== Searching for Chimera.app ==="
           find ./DerivedData -name "Chimera.app" -type d
           APP_PATH=$(find ./DerivedData -name "Chimera.app" -type d | head -n 1)
           if [ -z "$APP_PATH" ]; then
             echo "ERROR: Chimera.app not found"
+            {
+              echo "### Package .app failed"
+              echo "Chimera.app not found in DerivedData. Structure:"
+              echo '```'
+              find ./DerivedData -maxdepth 5 -type d | sort
+              echo '```'
+            } >> $GITHUB_STEP_SUMMARY
             exit 1
           fi
           echo "Found app at: $APP_PATH"
