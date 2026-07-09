@@ -25,14 +25,10 @@ jobs:
           set -x
           node -v
           npm -v
-          npm install --no-save --verbose > npm-install.log 2>&1 || {
-            echo "### npm install failed" >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
-            tail -n 200 npm-install.log >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
-            tail -n 200 npm-install.log
-            exit 1
-          }
+          # Use --ignore-scripts first to verify core install works; run patches manually after
+          npm install --no-save --ignore-scripts
+          node scripts/patch-bare-kit.js
+          node scripts/patch-qvac-sdk.js
 
       - name: Prebuild iOS
         working-directory: apps/mobile-expo
