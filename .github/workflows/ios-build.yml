@@ -104,12 +104,17 @@ jobs:
           name: Chimera-ios-app
           path: apps/mobile-expo/ios/Chimera.app.zip
 
-      - name: Upload .app.zip to transfer.sh
+      - name: Split .app.zip into chunks and commit to ios-builds branch
         if: success()
-        working-directory: apps/mobile-expo/ios
         run: |
-          echo "Uploading Chimera.app.zip to transfer.sh..."
-          UPLOAD_URL=$(curl --progress-bar --upload-file Chimera.app.zip https://transfer.sh/Chimera.app.zip)
-          echo "Download URL: $UPLOAD_URL"
-          echo "### iOS Build Download" >> $GITHUB_STEP_SUMMARY
-          echo "Download URL: $UPLOAD_URL" >> $GITHUB_STEP_SUMMARY
+          git config user.email "ci@example.com"
+          git config user.name "GitHub Actions CI"
+          git fetch origin ios-builds || true
+          git checkout -B ios-builds
+          rm -f Chimera.app.zip.*
+          split -b 45m apps/mobile-expo/ios/Chimera.app.zip Chimera.app.zip.
+          ls -lh Chimera.app.zip.*
+          git add Chimera.app.zip.*
+          git commit -m "iOS simulator build chunks ${{ github.run_number }}" || true
+          git push origin ios-builds
+          echo "Chunks committed to ios-builds branch"
