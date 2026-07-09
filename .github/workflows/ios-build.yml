@@ -104,15 +104,14 @@ jobs:
           name: Chimera-ios-app
           path: apps/mobile-expo/ios/Chimera.app.zip
 
-      - name: Create GitHub Release with .app.zip
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Commit .app.zip to ios-builds branch
+        if: success()
         run: |
-          cd apps/mobile-expo/ios
-          TAG="ios-build-${{ github.run_number }}"
-          gh release create "$TAG" Chimera.app.zip \
-            --title "iOS Simulator Build $TAG" \
-            --notes "iOS simulator .app for Appetize" \
-            --repo ${{ github.repository }} \
-            --target ${{ github.sha }} \
-            || echo "Release may already exist"
+          git config user.email "ci@example.com"
+          git config user.name "GitHub Actions CI"
+          git fetch origin ios-builds || true
+          git checkout -B ios-builds
+          cp apps/mobile-expo/ios/Chimera.app.zip Chimera.app.zip
+          git add Chimera.app.zip
+          git commit -m "iOS simulator build ${{ github.run_number }}" || true
+          git push origin ios-builds
