@@ -112,7 +112,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           cd apps/mobile-expo/ios
-          TAG="ios-build-${{ github.run_number }}"
+          TAG="ios-build-${{ github.run_number }}-${{ github.run_attempt }}"
           echo "Creating release $TAG"
           RELEASE_JSON=$(curl -s -X POST \
             -H "Authorization: Bearer $GITHUB_TOKEN" \
@@ -121,6 +121,12 @@ jobs:
             "https://api.github.com/repos/${{ github.repository }}/releases" \
             -d "{\"tag_name\":\"$TAG\",\"name\":\"iOS Simulator Build $TAG\",\"body\":\"iOS simulator .app for Appetize\"}")
           echo "Release response: $RELEASE_JSON"
+          {
+            echo "### Release Response"
+            echo '```json'
+            echo "$RELEASE_JSON"
+            echo '```'
+          } >> $GITHUB_STEP_SUMMARY
           UPLOAD_URL=$(echo "$RELEASE_JSON" | python3 -c "import sys, json; d=json.load(sys.stdin); print(d.get('upload_url', '').replace('{?name,label}',''))")
           RELEASE_ID=$(echo "$RELEASE_JSON" | python3 -c "import sys, json; d=json.load(sys.stdin); print(d.get('id', ''))")
           echo "Upload URL: $UPLOAD_URL"
@@ -130,12 +136,19 @@ jobs:
             exit 1
           fi
           echo "Uploading asset..."
-          curl -X POST \
+          UPLOAD_JSON=$(curl -s -X POST \
             -H "Authorization: Bearer $GITHUB_TOKEN" \
             -H "Accept: application/vnd.github+json" \
             -H "Content-Type: application/zip" \
             --data-binary @Chimera.app.zip \
-            "$UPLOAD_URL?name=Chimera.app.zip"
+            "$UPLOAD_URL?name=Chimera.app.zip")
+          echo "Upload response: $UPLOAD_JSON"
+          {
+            echo "### Upload Response"
+            echo '```json'
+            echo "$UPLOAD_JSON"
+            echo '```'
+          } >> $GITHUB_STEP_SUMMARY
           echo "Download URL: https://github.com/${{ github.repository }}/releases/download/$TAG/Chimera.app.zip"
           echo "### iOS Build Download" >> $GITHUB_STEP_SUMMARY
           echo "Download URL: https://github.com/${{ github.repository }}/releases/download/$TAG/Chimera.app.zip" >> $GITHUB_STEP_SUMMARY
