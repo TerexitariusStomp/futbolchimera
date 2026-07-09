@@ -73,7 +73,13 @@ jobs:
       - name: Package .app for Appetize
         working-directory: apps/mobile-expo/ios
         run: |
-          APP_PATH=$(find ./DerivedData/Build/Products -name "Chimera.app" -type d | head -n 1)
+          echo "Searching for Chimera.app..."
+          find ./DerivedData -name "Chimera.app" -type d
+          APP_PATH=$(find ./DerivedData -name "Chimera.app" -type d | head -n 1)
+          if [ -z "$APP_PATH" ]; then
+            echo "ERROR: Chimera.app not found"
+            exit 1
+          fi
           echo "Found app at: $APP_PATH"
           zip -r Chimera.app.zip "$APP_PATH"
 
