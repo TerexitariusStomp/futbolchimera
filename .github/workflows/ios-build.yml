@@ -104,14 +104,15 @@ jobs:
           name: Chimera-ios-app
           path: apps/mobile-expo/ios/Chimera.app.zip
 
-      - name: Commit .app.zip to ios-builds branch
+      - name: Commit .app.zip to ios-builds branch (Git LFS)
         if: success()
         run: |
           git config user.email "ci@example.com"
           git config user.name "GitHub Actions CI"
+          git lfs track "*.app.zip"
           git fetch origin ios-builds || true
           git checkout -B ios-builds
           cp apps/mobile-expo/ios/Chimera.app.zip Chimera.app.zip
-          git add Chimera.app.zip
+          git add .gitattributes Chimera.app.zip
           git commit -m "iOS simulator build ${{ github.run_number }}" || true
           git push origin ios-builds
