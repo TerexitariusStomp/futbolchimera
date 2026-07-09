@@ -134,50 +134,37 @@ jobs:
           name: Chimera-ios-app
           path: apps/mobile-expo/ios/Chimera.app.zip
 
-      - name: Create GitHub Release with .app.zip
+      - name: Upload to Appetize
         if: success()
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           cd apps/mobile-expo/ios
-          gh auth status || true
-          TAG="ios-build-${{ github.run_number }}-${{ github.run_attempt }}"
-          echo "Creating release $TAG"
-          gh release create "$TAG" \
-            --title "iOS Simulator Build $TAG" \
-            --notes "iOS simulator .app for Appetize" \
-            --repo ${{ github.repository }}
-          echo "Uploading asset to $TAG"
-          RELEASE_ID=$(gh api "repos/${{ github.repository }}/releases/tags/$TAG" --jq '.id')
-          echo "Release ID: $RELEASE_ID"
-          gh api \
-            --method POST \
-            -H "Accept: application/vnd.github+json" \
-            -H "Content-Type: application/zip" \
-            "https://uploads.github.com/repos/${{ github.repository }}/releases/$RELEASE_ID/assets?name=Chimera.app.zip" \
-            --input Chimera.app.zip > release-upload.log 2>&1
-          EXIT=$?
-          echo "Upload output:"
-          cat release-upload.log
-          echo "Download URL: https://github.com/${{ github.repository }}/releases/download/$TAG/Chimera.app.zip"
-          if [ $EXIT -ne 0 ]; then
-            echo "Asset upload failed"
-            exit $EXIT
+          APPETIZE_TOKEN="${{ secrets.APPETIZE_TOKEN }}"
+          APPETIZE_PUBLIC_KEY="${{ secrets.APPETIZE_PUBLIC_KEY }}"
+          if [ -z "$APPETIZE_TOKEN" ]; then
+            echo "APPETIZE_TOKEN secret not set. Skipping Appetize upload."
+            echo "Set the APPETIZE_TOKEN repository secret to enable upload."
+            exit 0
           fi
-          echo "### iOS Build Download" >> $GITHUB_STEP_SUMMARY
-          echo "Download URL: https://github.com/${{ github.repository }}/releases/download/$TAG/Chimera.app.zip" >> $GITHUB_STEP_SUMMARY
-
-      - name: Commit release upload debug on failure
-        if: failure()
-        run: |
-          git config user.email "ci@example.com"
-          git config user.name "GitHub Actions CI"
-          git checkout --orphan ci-debug || git checkout ci-debug
-          for f in release-upload.log release-debug.log; do
-            if [ -f apps/mobile-expo/ios/$f ]; then
-              cp apps/mobile-expo/ios/$f $f
-              git add $f
-            fi
-          done
-          git commit -m "CI release upload debug" || true
-          git push origin ci-debug
+          if [ -z "$APPETIZE_PUBLIC_KEY" ]; then
+            echo "APPETIZE_PUBLIC_KEY not set. Creating new app on Appetize."
+            RESPONSE=$(curl -s -X POST \
+              https://api.appetize.io/v1/apps \
+              -H "X-API-KEY: $APPETIZE_TOKEN" \
+              -F "file=@Chimera.app.zip" \
+              -F "platform=ios")
+          else
+            echo "Updating existing app $APPETIZE_PUBLIC_KEY on Appetize."
+            RESPONSE=$(curl -s -X POST \
+              "https://api.appetize.io/v1/apps/$APPETIZE_PUBLIC_KEY" \
+              -H "X-API-KEY: $APPETIZE_TOKEN" \
+              -F "file=@Chimera.app.zip" \
+              -F "platform=ios")
+          fi
+          echo "Appetize response: $RESPONSE"
+          echo '### Appetize Upload' >> $GITHUB_STEP_SUMMARY
+          echo "Response: $RESPONSE" >> $GITHUB_STEP_SUMMARY
+          PUBLICKEY=$(echo "$RESPONSE" | python3 -c "import sys, json; d=json.load(sys.stdin); print(d.get('publicKey',''))")
+          if [ -n "$PUBLICKEY" ]; then
+            echo "Appetize URL: https://appetize.io/app/$PUBLICKEY"
+            echo "Appetize URL: https://appetize.io/app/$PUBLICKEY" >> $GITHUB_STEP_SUMMARY
+          fi
