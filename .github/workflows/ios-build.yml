@@ -74,24 +74,17 @@ jobs:
         working-directory: apps/mobile-expo/ios
         run: |
           set -x
-          echo "=== Searching for any .app bundle ===" | tee package.log
-          find ./DerivedData -name "*.app" -type d | tee -a package.log
-          APP_PATH=$(find ./DerivedData -name "*.app" -type d | head -n 1)
-          if [ -z "$APP_PATH" ]; then
-            echo "=== DerivedData structure ===" | tee -a package.log
-            find ./DerivedData -maxdepth 5 -type d | sort | tee -a package.log
-            echo "ERROR: No .app bundle found" | tee -a package.log
+          APP_PATH="./DerivedData/Build/Products/Release-iphonesimulator/Chimera.app"
+          echo "Expected app path: $APP_PATH"
+          ls -ld "$APP_PATH" || {
+            echo "=== Searching for any .app bundle ==="
+            find ./DerivedData -name "*.app" -type d || true
+            echo "=== Build/Products contents ==="
+            find ./DerivedData/Build/Products -maxdepth 3 -type d 2>/dev/null | sort || true
+            echo "ERROR: Chimera.app not found at expected path"
             exit 1
-          fi
-          echo "Found app at: $APP_PATH" | tee -a package.log
-          zip -r Chimera.app.zip "$APP_PATH" 2>&1 | tee -a package.log
-
-      - name: Upload package log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: package-log
-          path: apps/mobile-expo/ios/package.log
+          }
+          zip -r Chimera.app.zip "$APP_PATH"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
