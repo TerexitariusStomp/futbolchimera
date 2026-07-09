@@ -139,14 +139,37 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           cd apps/mobile-expo/ios
-          echo "$GITHUB_TOKEN" | gh auth login --with-token --hostname github.com
-          TAG="ios-build-${{ github.run_number }}-${{ github.run_attempt }}-${{ github.run_id }}"
-          echo "Creating release $TAG"
-          gh release create "$TAG" \
-            --title "iOS Simulator Build $TAG" \
-            --notes "iOS simulator .app for Appetize"
-          echo "Uploading asset to $TAG"
-          gh release upload "$TAG" Chimera.app.zip --clobber
-          echo "Download URL: https://github.com/${{ github.repository }}/releases/download/$TAG/Chimera.app.zip"
+          {
+            echo "=== gh auth ==="
+            echo "$GITHUB_TOKEN" | gh auth login --with-token --hostname github.com
+            gh auth status || true
+            TAG="ios-build-${{ github.run_number }}-${{ github.run_attempt }}-${{ github.run_id }}"
+            echo "Creating release $TAG"
+            gh release create "$TAG" \
+              --title "iOS Simulator Build $TAG" \
+              --notes "iOS simulator .app for Appetize"
+            echo "Uploading asset to $TAG"
+            gh release upload "$TAG" Chimera.app.zip --clobber
+            echo "Download URL: https://github.com/${{ github.repository }}/releases/download/$TAG/Chimera.app.zip"
+          } 2>&1 | tee release-debug.log
+          EXIT=${PIPESTATUS[0]}
+          echo "### Release Step Output" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          tail -n 100 release-debug.log >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          if [ $EXIT -ne 0 ]; then exit $EXIT; fi
           echo "### iOS Build Download" >> $GITHUB_STEP_SUMMARY
           echo "Download URL: https://github.com/${{ github.repository }}/releases/download/$TAG/Chimera.app.zip" >> $GITHUB_STEP_SUMMARY
+
+      - name: Commit release debug on failure
+        if: failure()
+        run: |
+          git config user.email "ci@example.com"
+          git config user.name "GitHub Actions CI"
+          git checkout --orphan ci-debug || git checkout ci-debug
+          if [ -f apps/mobile-expo/ios/release-debug.log ]; then
+            cp apps/mobile-expo/ios/release-debug.log release-debug.log
+            git add release-debug.log
+          fi
+          git commit -m "CI release debug" || true
+          git push origin ci-debug
