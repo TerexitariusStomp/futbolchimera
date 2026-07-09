@@ -71,20 +71,32 @@ jobs:
             }
 
       - name: Package .app for Appetize
+        id: package
         working-directory: apps/mobile-expo/ios
         run: |
           set -x
           APP_PATH="./DerivedData/Build/Products/Release-iphonesimulator/Chimera.app"
-          echo "Expected app path: $APP_PATH"
-          ls -ld "$APP_PATH" || {
-            echo "=== Searching for any .app bundle ==="
-            find ./DerivedData -name "*.app" -type d || true
-            echo "=== Build/Products contents ==="
-            find ./DerivedData/Build/Products -maxdepth 3 -type d 2>/dev/null | sort || true
-            echo "ERROR: Chimera.app not found at expected path"
+          echo "Expected app path: $APP_PATH" | tee package-debug.log
+          ls -ld "$APP_PATH" | tee -a package-debug.log || {
+            echo "=== Searching for any .app bundle ===" | tee -a package-debug.log
+            find ./DerivedData -name "*.app" -type d | tee -a package-debug.log || true
+            echo "=== Build/Products contents ===" | tee -a package-debug.log
+            find ./DerivedData/Build/Products -maxdepth 3 -type d 2>/dev/null | sort | tee -a package-debug.log || true
+            echo "ERROR: Chimera.app not found at expected path" | tee -a package-debug.log
             exit 1
           }
-          zip -r Chimera.app.zip "$APP_PATH"
+          zip -r Chimera.app.zip "$APP_PATH" 2>&1 | tee -a package-debug.log
+
+      - name: Commit debug log on failure
+        if: failure() && steps.package.outcome == 'failure'
+        run: |
+          git config user.email "ci@example.com"
+          git config user.name "GitHub Actions CI"
+          git checkout --orphan ci-debug || git checkout ci-debug
+          cp apps/mobile-expo/ios/package-debug.log package-debug.log
+          git add package-debug.log
+          git commit -m "CI packaging debug log" || true
+          git push origin ci-debug
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
