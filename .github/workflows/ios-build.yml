@@ -25,8 +25,8 @@ jobs:
           set -x
           node -v
           npm -v
-          # Use --ignore-scripts first to verify core install works; run patches manually after
-          npm install --no-save --ignore-scripts
+          # Use --ignore-scripts + --legacy-peer-deps to avoid @qvac/sdk peer dep conflict
+          npm install --no-save --ignore-scripts --legacy-peer-deps
           node scripts/patch-bare-kit.js
           node scripts/patch-qvac-sdk.js
 
