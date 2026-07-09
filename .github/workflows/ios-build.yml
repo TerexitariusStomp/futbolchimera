@@ -30,9 +30,21 @@ jobs:
           node scripts/patch-bare-kit.js
           node scripts/patch-qvac-sdk.js
 
+      - name: Check CocoaPods
+        run: |
+          which pod || echo "CocoaPods not found"
+          pod --version || true
+
       - name: Prebuild iOS
         working-directory: apps/mobile-expo
-        run: npx expo prebuild --platform ios
+        run: |
+          npx expo prebuild --platform ios --verbose 2>&1 | tee prebuild.log || {
+            echo "### expo prebuild failed" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            tail -n 200 prebuild.log >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            exit 1
+          }
 
       - name: Build iOS simulator app
         working-directory: apps/mobile-expo/ios
