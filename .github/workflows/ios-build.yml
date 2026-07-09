@@ -110,14 +110,20 @@ jobs:
           zip -r Chimera.app.zip "$APP_PATH" 2>&1 | tee -a package-debug.log
 
       - name: Commit debug log on failure
-        if: failure() && steps.package.outcome == 'failure'
+        if: failure()
         run: |
           git config user.email "ci@example.com"
           git config user.name "GitHub Actions CI"
           git checkout --orphan ci-debug || git checkout ci-debug
-          cp apps/mobile-expo/ios/package-debug.log package-debug.log
-          git add package-debug.log
-          git commit -m "CI packaging debug log" || true
+          if [ -f apps/mobile-expo/ios/package-debug.log ]; then
+            cp apps/mobile-expo/ios/package-debug.log package-debug.log
+            git add package-debug.log
+          fi
+          if [ -f apps/mobile-expo/ios/release-output.log ]; then
+            cp apps/mobile-expo/ios/release-output.log release-output.log
+            git add release-output.log
+          fi
+          git commit -m "CI debug logs" || true
           git push origin ci-debug
 
       - name: Upload artifact
