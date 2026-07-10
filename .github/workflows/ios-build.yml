@@ -78,7 +78,7 @@ jobs:
         working-directory: apps/mobile-expo/ios
         run: |
           xcodebuild \
-            -workspace Chimera.xcworkspace \
+            -project Chimera.xcodeproj \
             -scheme Chimera \
             -sdk iphonesimulator \
             -configuration Release \
