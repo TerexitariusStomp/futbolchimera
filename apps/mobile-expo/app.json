@@ -49,10 +49,10 @@
             "enableProguardInReleaseBuilds": true,
             "enableShrinkResourcesInReleaseBuilds": true,
             "enableMinifyInReleaseBuilds": true,
-            "newArchEnabled": true
+            "newArchEnabled": false
           },
           "ios": {
-            "newArchEnabled": true
+            "newArchEnabled": false
           }
         }
       ]
