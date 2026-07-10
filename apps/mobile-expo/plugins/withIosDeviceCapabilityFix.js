@@ -1,28 +1,40 @@
 // Removes the arm64 UIRequiredDeviceCapabilities requirement added by the new architecture.
 // This allows the iOS simulator build to run on both x86_64 and arm64 Appetize hosts.
-const { withInfoPlist } = require('@expo/config-plugins');
+const fs = require('fs');
+const path = require('path');
+const { withDangerousMod } = require('@expo/config-plugins');
+
+function removeArm64FromInfoPlist(infoPlistPath) {
+  if (!fs.existsSync(infoPlistPath)) {
+    console.log('[withIosDeviceCapabilityFix] Info.plist not found at', infoPlistPath);
+    return false;
+  }
+  let content = fs.readFileSync(infoPlistPath, 'utf-8');
+  if (!content.includes('<string>arm64</string>')) {
+    console.log('[withIosDeviceCapabilityFix] No arm64 requirement found in Info.plist');
+    return false;
+  }
+  // Remove the UIRequiredDeviceCapabilities block entirely
+  content = content.replace(
+    /\s*<key>UIRequiredDeviceCapabilities<\/key>\s*<array>[\s\S]*?<\/array>/,
+    ''
+  );
+  fs.writeFileSync(infoPlistPath, content);
+  console.log('[withIosDeviceCapabilityFix] Removed UIRequiredDeviceCapabilities arm64 block from Info.plist');
+  return true;
+}
 
 function withIosDeviceCapabilityFix(config) {
-  return withInfoPlist(config, (cfg) => {
-    const infoPlist = cfg.modResults;
-    if (infoPlist.UIRequiredDeviceCapabilities) {
-      const caps = infoPlist.UIRequiredDeviceCapabilities;
-      if (Array.isArray(caps) && caps.includes('arm64')) {
-        infoPlist.UIRequiredDeviceCapabilities = caps.filter(c => c !== 'arm64');
-        if (infoPlist.UIRequiredDeviceCapabilities.length === 0) {
-          delete infoPlist.UIRequiredDeviceCapabilities;
-        }
-        console.log('[withIosDeviceCapabilityFix] Removed arm64 requirement from UIRequiredDeviceCapabilities');
-      } else if (typeof caps === 'object' && caps['arm64'] !== undefined) {
-        delete caps['arm64'];
-        if (Object.keys(caps).length === 0) {
-          delete infoPlist.UIRequiredDeviceCapabilities;
-        }
-        console.log('[withIosDeviceCapabilityFix] Removed arm64 requirement from UIRequiredDeviceCapabilities');
-      }
-    }
-    return cfg;
-  });
+  return withDangerousMod(config, [
+    'ios',
+    async (cfg) => {
+      const projectRoot = cfg.modRequest.projectRoot;
+      const projectName = cfg.modRequest.projectName || 'Chimera';
+      const infoPlistPath = path.join(projectRoot, 'ios', projectName, 'Info.plist');
+      removeArm64FromInfoPlist(infoPlistPath);
+      return cfg;
+    },
+  ]);
 }
 
 module.exports = withIosDeviceCapabilityFix;
