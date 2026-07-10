@@ -70,6 +70,10 @@ jobs:
             exit 1
           }
 
+      - name: Install CocoaPods
+        working-directory: apps/mobile-expo/ios
+        run: pod install
+
       - name: List Xcode schemes
         working-directory: apps/mobile-expo/ios
         run: xcodebuild -list
@@ -77,6 +81,7 @@ jobs:
       - name: Build iOS simulator app
         working-directory: apps/mobile-expo/ios
         run: |
+          set -o pipefail
           xcodebuild \
             -project Chimera.xcodeproj \
             -scheme Chimera \
@@ -86,13 +91,15 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
-            2>&1 | tee xcodebuild.log || {
-              echo "### xcodebuild failed" >> $GITHUB_STEP_SUMMARY
-              echo '```' >> $GITHUB_STEP_SUMMARY
-              tail -n 300 xcodebuild.log >> $GITHUB_STEP_SUMMARY
-              echo '```' >> $GITHUB_STEP_SUMMARY
-              exit 1
-            }
+            2>&1 | tee xcodebuild.log
+          EXIT=${PIPESTATUS[0]}
+          if [ $EXIT -ne 0 ]; then
+            echo "### xcodebuild failed" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            tail -n 300 xcodebuild.log >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            exit $EXIT
+          fi
 
       - name: Package .app for Appetize
         id: package
