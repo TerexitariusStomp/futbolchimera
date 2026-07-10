@@ -43,6 +43,7 @@ jobs:
           npm install --no-save --ignore-scripts --legacy-peer-deps
           node scripts/patch-bare-kit.js
           node scripts/patch-qvac-sdk.js
+          node scripts/patch-expo-device.js
 
       - name: Cache CocoaPods
         uses: actions/cache@v4
