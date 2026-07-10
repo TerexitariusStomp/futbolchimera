@@ -173,9 +173,9 @@ jobs:
         if: failure()
         run: |
           if [ -f apps/mobile-expo/ios/xcodebuild.log ]; then
-            tail -n 300 apps/mobile-expo/ios/xcodebuild.log | grep -vE '^    (export |builtin-)' | tail -n 80 > /tmp/xcode_tail.txt || true
+            tail -n 40 apps/mobile-expo/ios/xcodebuild.log > /tmp/xcode_tail.txt || true
             MSG=$(cat /tmp/xcode_tail.txt | sed -z 's/\n/%0A/g' | sed 's/%0A$//' | head -c 7000)
-            echo "::error::xcodebuild tail:%0A${MSG}"
+            echo "::error::xcodebuild raw tail:%0A${MSG}"
           else
             echo '::error::xcodebuild.log not found'
           fi
