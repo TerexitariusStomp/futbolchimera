@@ -174,7 +174,7 @@ jobs:
         run: |
           if [ -f apps/mobile-expo/ios/xcodebuild.log ]; then
             echo '::error::xcodebuild failed. Relevant lines:'
-            grep -E "error:|FAILED|fatal|undefined|No such file|could not|unable|Linker|duplicate|conflict" apps/mobile-expo/ios/xcodebuild.log | tail -n 50 | sed 's/^/::error::/' || true
+            grep -E ": error:|: fatal error:|FAILED:|undefined|No such file|could not|unable to|Linker|duplicate|conflict" apps/mobile-expo/ios/xcodebuild.log | tail -n 50 | sed 's/^/::error::/' || true
             echo '::error::--- tail (excluding export lines) ---'
             tail -n 300 apps/mobile-expo/ios/xcodebuild.log | grep -v '^    export ' | tail -n 100 | sed 's/^/::error::/' || true
           else
