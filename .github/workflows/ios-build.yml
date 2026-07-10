@@ -83,7 +83,7 @@ jobs:
         run: |
           set -o pipefail
           xcodebuild \
-            -project Chimera.xcodeproj \
+            -workspace Chimera.xcworkspace \
             -scheme Chimera \
             -sdk iphonesimulator \
             -configuration Release \
