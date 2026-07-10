@@ -79,6 +79,10 @@ jobs:
         working-directory: apps/mobile-expo
         run: node scripts/patch-pods.js
 
+      - name: Check Info.plist device capabilities
+        working-directory: apps/mobile-expo/ios/Chimera
+        run: cat Info.plist | grep -A2 "UIRequiredDeviceCapabilities" || true
+
       - name: List Xcode schemes
         working-directory: apps/mobile-expo/ios
         run: xcodebuild -list

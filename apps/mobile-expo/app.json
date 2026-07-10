@@ -38,7 +38,6 @@
     "plugins": [
       "./plugins/withIosFrontendResources.js",
       "./plugins/withIosLinkerFix.js",
-      "./plugins/withIosDeviceCapabilityFix.js",
       "expo-bare-kit",
       "./plugins/generated/qvac-sdk-plugin.cjs",
       [
@@ -56,7 +55,8 @@
             "newArchEnabled": true
           }
         }
-      ]
+      ],
+      "./plugins/withIosDeviceCapabilityFix.js"
     ],
     "extra": {
       "qvac": {
