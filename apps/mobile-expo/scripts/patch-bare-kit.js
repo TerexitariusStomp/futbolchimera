@@ -78,4 +78,47 @@ if (fs.existsSync(configFile)) {
   console.log('[patch-bare-kit] react-native.config.js not found');
 }
 
+// 4. Patch iOS BareKitModuleProvider.h to remove RCTModuleProvider protocol
+// RN 0.76 does not define RCTModuleProvider protocol, causing Xcode build failure.
+// The class still works as a module provider without the protocol declaration.
+const iosProviderHeader = path.join(baseDir, 'ios', 'BareKitModuleProvider.h');
+if (fs.existsSync(iosProviderHeader)) {
+  let content = fs.readFileSync(iosProviderHeader, 'utf-8');
+  if (content.includes('RCTModuleProvider')) {
+    // Remove the protocol declaration with optional whitespace, e.g. < RCTModuleProvider >
+    content = content.replace(/<\s*RCTModuleProvider\s*>/g, '');
+    fs.writeFileSync(iosProviderHeader, content);
+    console.log('[patch-bare-kit] Patched BareKitModuleProvider.h: removed RCTModuleProvider protocol');
+  } else {
+    console.log('[patch-bare-kit] BareKitModuleProvider.h already patched or no RCTModuleProvider found');
+  }
+  const after = fs.readFileSync(iosProviderHeader, 'utf-8');
+  if (after.includes('RCTModuleProvider')) {
+    console.error('[patch-bare-kit] ERROR: RCTModuleProvider still present in BareKitModuleProvider.h');
+    process.exit(1);
+  }
+} else {
+  console.log('[patch-bare-kit] BareKitModuleProvider.h not found');
+}
+
+// 5. Patch iOS BareKitModuleProvider.mm to remove RCTModuleProvider import and
+// protocol methods that don't exist in RN 0.76.
+const iosProviderImpl = path.join(baseDir, 'ios', 'BareKitModuleProvider.mm');
+if (fs.existsSync(iosProviderImpl)) {
+  let content = fs.readFileSync(iosProviderImpl, 'utf-8');
+  let changed = false;
+  if (content.includes('#import <ReactCommon/RCTModuleProvider.h>')) {
+    content = content.replace('#import <ReactCommon/RCTModuleProvider.h>\n', '');
+    changed = true;
+  }
+  if (changed) {
+    fs.writeFileSync(iosProviderImpl, content);
+    console.log('[patch-bare-kit] Patched BareKitModuleProvider.mm: removed RCTModuleProvider import');
+  } else {
+    console.log('[patch-bare-kit] BareKitModuleProvider.mm already patched or no RCTModuleProvider import found');
+  }
+} else {
+  console.log('[patch-bare-kit] BareKitModuleProvider.mm not found');
+}
+
 console.log('[patch-bare-kit] Done');
