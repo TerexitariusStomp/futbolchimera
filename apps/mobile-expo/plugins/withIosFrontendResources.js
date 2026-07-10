@@ -38,6 +38,19 @@ function withIosFrontendResources(config) {
       copyRecursive(srcDir, destDir);
       console.log(`[withIosFrontendResources] copied frontend assets to ${destDir}`);
 
+      // Patch index.html: remove type="module" and crossorigin from script tags
+      // WKWebView on iOS does not support ES module CORS for file:// URLs
+      const indexHtmlPath = path.join(destDir, 'index.html');
+      if (fs.existsSync(indexHtmlPath)) {
+        let html = fs.readFileSync(indexHtmlPath, 'utf-8');
+        html = html.replace(/<script\s+type="module"\s+crossorigin/g, '<script');
+        html = html.replace(/<script\s+type="module"/g, '<script');
+        // Remove service worker registration (doesn't work with file:// URLs)
+        html = html.replace(/<script>[\s\S]*?serviceWorker[\s\S]*?<\/script>/g, '');
+        fs.writeFileSync(indexHtmlPath, html);
+        console.log('[withIosFrontendResources] patched index.html: removed type="module" and crossorigin');
+      }
+
       // Run script to add resources to Xcode project
       try {
         execSync('node scripts/add-ios-resources.js', {
