@@ -172,13 +172,22 @@ jobs:
       - name: Annotate build failure
         if: failure()
         run: |
-          if [ -f apps/mobile-expo/ios/xcodebuild.log ]; then
-            tail -c 7000 apps/mobile-expo/ios/xcodebuild.log > /tmp/xcode_tail.txt || true
-            MSG=$(cat /tmp/xcode_tail.txt | sed -z 's/\n/%0A/g' | sed 's/%0A$//' | head -c 7000)
-            echo "::error::xcodebuild tail (bytes):%0A${MSG}"
-          else
-            echo '::error::xcodebuild.log not found'
-          fi
+          python3 - <<'PY'
+          import os
+          log_path = 'apps/mobile-expo/ios/xcodebuild.log'
+          if not os.path.exists(log_path):
+              print('::error::xcodebuild.log not found')
+          else:
+              size = os.path.getsize(log_path)
+              print(f'::error::xcodebuild.log size={size} bytes')
+              with open(log_path, 'rb') as f:
+                  f.seek(0, 2)
+                  end = f.tell()
+                  f.seek(max(0, end - 6000), 0)
+                  tail = f.read(6000).decode('utf-8', errors='replace')
+              msg = tail.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+              print(f'::error::xcodebuild tail:%0A{msg}')
+          PY
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
