@@ -79,9 +79,11 @@ jobs:
         working-directory: apps/mobile-expo
         run: node scripts/patch-pods.js
 
-      - name: Check Info.plist device capabilities
+      - name: Remove arm64 device capability
         working-directory: apps/mobile-expo/ios/Chimera
-        run: cat Info.plist | grep -A2 "UIRequiredDeviceCapabilities" || true
+        run: |
+          sed -i '' '/<key>UIRequiredDeviceCapabilities<\/key>/,/<\/array>/d' Info.plist || true
+          cat Info.plist | grep "UIRequiredDeviceCapabilities" || echo "UIRequiredDeviceCapabilities removed"
 
       - name: List Xcode schemes
         working-directory: apps/mobile-expo/ios

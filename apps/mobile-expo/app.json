@@ -55,8 +55,7 @@
             "newArchEnabled": true
           }
         }
-      ],
-      "./plugins/withIosDeviceCapabilityFix.js"
+      ]
     ],
     "extra": {
       "qvac": {
