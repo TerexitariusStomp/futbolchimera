@@ -75,6 +75,10 @@ jobs:
         working-directory: apps/mobile-expo/ios
         run: pod install
 
+      - name: Patch Pods sources
+        working-directory: apps/mobile-expo
+        run: node scripts/patch-pods.js
+
       - name: List Xcode schemes
         working-directory: apps/mobile-expo/ios
         run: xcodebuild -list
