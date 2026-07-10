@@ -24,13 +24,18 @@ function removeArm64FromInfoPlist(infoPlistPath) {
   return true;
 }
 
+console.log('[withIosDeviceCapabilityFix] Plugin module loaded');
+
 function withIosDeviceCapabilityFix(config) {
+  console.log('[withIosDeviceCapabilityFix] Applying plugin');
   return withDangerousMod(config, [
     'ios',
     async (cfg) => {
+      console.log('[withIosDeviceCapabilityFix] DangerousMod ios running, modRequest:', JSON.stringify(cfg.modRequest));
       const projectRoot = cfg.modRequest.projectRoot;
       const projectName = cfg.modRequest.projectName || 'Chimera';
       const infoPlistPath = path.join(projectRoot, 'ios', projectName, 'Info.plist');
+      console.log('[withIosDeviceCapabilityFix] Target Info.plist:', infoPlistPath);
       removeArm64FromInfoPlist(infoPlistPath);
       return cfg;
     },
