@@ -158,6 +158,17 @@ jobs:
           git commit -m "CI debug logs" || true
           git push origin ci-debug
 
+      - name: Upload build logs artifact
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-build-logs
+          path: |
+            apps/mobile-expo/ios/xcodebuild.log
+            apps/mobile-expo/prebuild.log
+            apps/mobile-expo/ios/package-debug.log
+            apps/mobile-expo/ios/release-output.log
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
