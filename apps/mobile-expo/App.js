@@ -1,9 +1,14 @@
+import './polyfills';
+
+// Pre-import QVAC worker bundle so Metro includes it in the main bundle.
+// The QVAC SDK uses require("@qvac/sdk/worker.mobile.bundle") internally.
+import '@qvac/sdk/dist/worker.mobile.bundle';
+
 import React, { useState, useEffect, useRef } from 'react';
 import { StyleSheet, View, Text, ActivityIndicator, Linking, Platform } from 'react-native';
 import { WebView } from 'react-native-webview';
 import * as FileSystem from 'expo-file-system';
 import Constants from 'expo-constants';
-import b4a from 'b4a';
 
 const WIKI_DIR = FileSystem.documentDirectory + 'llmwiki/';
 const MACHINE_ID_FILE = WIKI_DIR + '.machine-id';
@@ -22,24 +27,28 @@ async function getMachineId() {
     return id;
   } catch (e) {
     const id = 'ch-' + Math.random().toString(36).slice(2, 10) + '-' + Date.now().toString(36);
-    await FileSystem.writeAsStringAsync(MACHINE_ID_FILE, id).catch(() => {});
+    await FileSystem.writeAsStringAsync(MACHINE_ID_FILE, id).catch(() => { });
     machineIdCache = id;
     return id;
   }
 }
 
-const SOCCER_DIR = FileSystem.documentDirectory + 'soccer/';
-const AI_COACH_PROMPTS_DIR = SOCCER_DIR + 'prompts/';
-const ANALYTICS_DATA_DIR = SOCCER_DIR + 'analytics/';
-
-async function initSoccerDirs() {
-  try {
-    await FileSystem.makeDirectoryAsync(SOCCER_DIR, { intermediates: true }).catch(() => {});
-    await FileSystem.makeDirectoryAsync(AI_COACH_PROMPTS_DIR, { intermediates: true }).catch(() => {});
-    await FileSystem.makeDirectoryAsync(ANALYTICS_DATA_DIR, { intermediates: true }).catch(() => {});
-  } catch (e) {
-    console.error('Failed to init soccer dirs:', e);
-  }
+function useIosHtml() {
+  const [html, setHtml] = useState(null);
+  useEffect(() => {
+    async function loadHtml() {
+      try {
+        const path = FileSystem.bundleDirectory + 'index.html';
+        const content = await FileSystem.readAsStringAsync(path);
+        setHtml(content);
+      } catch (e) {
+        console.error('[App] Failed to read index.html:', e);
+        setHtml('');
+      }
+    }
+    if (Platform.OS === 'ios') loadHtml();
+  }, []);
+  return html;
 }
 
 export default function App() {
@@ -50,9 +59,9 @@ export default function App() {
   const [pearAvailable, setPearAvailable] = useState(false);
   const [pearStatus, setPearStatus] = useState({ running: false, peers: 0, topics: [] });
   const [qvacAvailable, setQvacAvailable] = useState(false);
-  const [qvacModelId, setQvacModelId] = useState(null);
   const [qvacModelLoading, setQvacModelLoading] = useState(false);
   const [qvacModelProgress, setQvacModelProgress] = useState(0);
+  const iosHtml = useIosHtml();
   const webViewRef = useRef(null);
   const pearWorkletRef = useRef(null);
   const pearPendingRef = useRef(new Map());
@@ -61,67 +70,83 @@ export default function App() {
 
   useEffect(() => {
     async function init() {
+      const fallbackTimer = setTimeout(() => {
+        setMachineId(prev => prev || ('ch-fallback-' + Date.now().toString(36)));
+      }, 3000);
+
       try {
-        await FileSystem.makeDirectoryAsync(WIKI_DIR, { intermediates: true }).catch(() => {});
-        await FileSystem.makeDirectoryAsync(TDAI_L0_DIR, { intermediates: true }).catch(() => {});
-        await FileSystem.makeDirectoryAsync(TDAI_L1_DIR, { intermediates: true }).catch(() => {});
-        await FileSystem.makeDirectoryAsync(TDAI_L2_DIR, { intermediates: true }).catch(() => {});
-        await FileSystem.makeDirectoryAsync(TDAI_L3_DIR, { intermediates: true }).catch(() => {});
-        await initSoccerDirs();
+        await FileSystem.makeDirectoryAsync(WIKI_DIR, { intermediates: true }).catch(() => { });
+        await FileSystem.makeDirectoryAsync(TDAI_L0_DIR, { intermediates: true }).catch(() => { });
+        await FileSystem.makeDirectoryAsync(TDAI_L1_DIR, { intermediates: true }).catch(() => { });
+        await FileSystem.makeDirectoryAsync(TDAI_L2_DIR, { intermediates: true }).catch(() => { });
+        await FileSystem.makeDirectoryAsync(TDAI_L3_DIR, { intermediates: true }).catch(() => { });
         const id = await getMachineId();
+        clearTimeout(fallbackTimer);
         setMachineId(id);
 
-        // Load on-device LLM via @qvac/sdk. If BareKit/QVAC is unavailable,
-        // the app keeps running and AI endpoints report unavailable.
-        try {
-          const { loadModel, LLAMA_3_2_1B_INST_Q4_0 } = await import('@qvac/sdk');
-          console.log('[App] Loading QVAC on-device model...');
-          setQvacModelLoading(true);
-          setModelStatus('loading model');
-          const modelId = await loadModel({
-            modelSrc: LLAMA_3_2_1B_INST_Q4_0,
-            modelType: 'llm',
-            onProgress: (progress) => {
-              console.log('[App] QVAC model load progress:', progress);
-              setQvacModelProgress(progress);
-            },
-          });
-          qvacModelIdRef.current = modelId;
-          setQvacModelId(modelId);
-          setQvacAvailable(true);
-          setModelStatus('ready');
-          console.log('[App] QVAC model loaded:', modelId);
-        } catch (modelErr) {
-          console.error('[App] QVAC model load failed:', modelErr);
-          setModelStatus(`error: ${modelErr.message}`);
-        } finally {
-          setQvacModelLoading(false);
-        }
+        // Load on-device LLM via @qvac/sdk in the background (non-blocking).
+        (async () => {
+          try {
+            console.log('[App] Importing @qvac/sdk...');
+            const qvac = await import('@qvac/sdk');
+            console.log('[App] QVAC SDK imported, loading model...');
+            setQvacModelLoading(true);
+            setModelStatus('loading model');
+            const modelId = await qvac.loadModel({
+              modelSrc: qvac.LLAMA_3_2_1B_INST_Q4_0,
+              modelType: 'llamacpp-completion',
+              onProgress: (progress) => {
+                console.log('[App] QVAC model load progress:', progress);
+                setQvacModelProgress(progress);
+              },
+            });
+            qvacModelIdRef.current = modelId;
+            setQvacAvailable(true);
+            setModelStatus('ready');
+            console.log('[App] QVAC model loaded:', modelId);
+          } catch (modelErr) {
+            console.error('[App] QVAC model load failed:', modelErr);
+            setModelStatus('error: ' + (modelErr.message || modelErr));
+          } finally {
+            setQvacModelLoading(false);
+          }
+        })();
       } catch (e) {
+        clearTimeout(fallbackTimer);
         console.error('Init error:', e);
-        setModelStatus(`error: ${e.message}`);
+        setModelStatus('error: ' + e.message);
       }
     }
     init();
   }, []);
 
   // Start the Pear P2P worklet (Bare + Hyperswarm) for native swarming.
-  // If react-native-bare-kit is not available or the bundle has not been built,
-  // the app falls back to the local-only stub swarm handlers.
+  // Delayed to avoid crashing the QVAC worklet if Pear fails.
   useEffect(() => {
     let worklet = null;
-    let terminated = false;
+    let cancelled = false;
 
     async function startPear() {
+      // Wait for QVAC to finish loading (or fail) before starting Pear,
+      // since a Pear worklet crash can kill the entire process.
+      const qvacReady = await waitForQvac();
+      if (cancelled) return;
+
       try {
+        console.log('[Pear] Importing react-native-bare-kit...');
         const { Worklet } = await import('react-native-bare-kit');
-        const bundle = await import('./pear-worker.bundle.js');
-        if (!bundle.default) {
+        console.log('[Pear] Importing b4a...');
+        const b4aMod = await import('b4a');
+        b4a = b4aMod.default || b4aMod;
+        console.log('[Pear] Importing pear-worker.bundle...');
+        const bundle = require('./pear-worker.bundle.js');
+        if (!bundle) {
           console.log('[Pear] No worker bundle found. Run npm run build:pear-worker.');
           return;
         }
+        console.log('[Pear] Starting worklet...');
         worklet = new Worklet();
-        worklet.start('/pear-worker.bundle', bundle.default);
+        worklet.start('/pear-worker.bundle', bundle);
         pearWorkletRef.current = worklet;
 
         const { IPC } = worklet;
@@ -148,24 +173,57 @@ export default function App() {
             console.error('[Pear] IPC parse error:', e);
           }
         });
+
+        console.log('[Pear] Worklet started');
       } catch (e) {
-        console.log('[Pear] Bare worklet unavailable:', e.message);
+        console.log('[Pear] Failed to start (non-fatal):', e.message);
       }
+    }
+
+    function waitForQvac() {
+      return new Promise((resolve) => {
+        const check = () => {
+          if (cancelled) return resolve(false);
+          if (qvacModelIdRef.current || modelStatus.startsWith('error')) {
+            resolve(true);
+          } else {
+            setTimeout(check, 1000);
+          }
+        };
+        // Give QVAC at most 120s to start, then proceed anyway
+        setTimeout(() => resolve(true), 120000);
+        check();
+      });
     }
 
     startPear();
 
     return () => {
-      terminated = true;
+      cancelled = true;
       if (worklet) {
-        try { worklet.terminate(); } catch (e) {}
+        try { worklet.terminate(); } catch (e) { }
       }
-      for (const pending of pearPendingRef.current.values()) {
-        pending.reject(new Error('Worklet terminated'));
-      }
-      pearPendingRef.current.clear();
     };
-  }, []);
+  }, [modelStatus]);
+
+  function pearRequest(action, body = {}) {
+    return new Promise((resolve, reject) => {
+      if (!pearWorkletRef.current) {
+        reject(new Error('Pear worklet not available'));
+        return;
+      }
+      const id = ++pearReqIdRef.current;
+      pearPendingRef.current.set(id, { resolve, reject });
+      const { IPC } = pearWorkletRef.current;
+      IPC.write(b4a.from(JSON.stringify({ id, action, body })));
+      setTimeout(() => {
+        if (pearPendingRef.current.has(id)) {
+          pearPendingRef.current.delete(id);
+          reject(new Error('Pear request timeout'));
+        }
+      }, 30000);
+    });
+  }
 
   // Handle deep links from the browser-based wallet flow
   useEffect(() => {
@@ -198,38 +256,16 @@ export default function App() {
   }, []);
 
   async function handleAIWrite(body) {
-    if (!qvacAvailable || !qvacModelIdRef.current) {
-      return {
-        success: false,
-        error: 'On-device QVAC AI is not available in this build.',
-      };
-    }
     try {
-      const { completion } = await import('@qvac/sdk');
-      const history = [{ role: 'user', content: body?.prompt || '' }];
-      const result = completion({ modelId: qvacModelIdRef.current, history, stream: false });
-      let text = '';
-      if (result && typeof result.text === 'object' && result.text !== null && typeof result.text.then === 'function') {
-        text = await result.text;
-      } else if (result && typeof result.tokenStream === 'object' && result.tokenStream !== null && typeof result.tokenStream[Symbol.asyncIterator] === 'function') {
-        for await (const token of result.tokenStream) {
-          text += token;
-        }
-      } else {
-        text = String(result || '');
+      if (!qvacModelIdRef.current) {
+        return { success: false, error: 'On-device AI model not loaded.' };
       }
-      return {
-        success: true,
-        data: {
-          title: body?.title || 'Generated',
-          body: text,
-          source: 'qvac-on-device',
-          model: 'LLAMA_3_2_1B_INST_Q4_0',
-        },
-      };
+      const { completion } = await import('@qvac/sdk');
+      const prompt = body.prompt || body.text || '';
+      const result = await completion(qvacModelIdRef.current, prompt);
+      return { success: true, data: { text: result } };
     } catch (e) {
-      console.error('[App] QVAC ai-write failed:', e);
-      return { success: false, error: e.message || 'QVAC inference error' };
+      return { success: false, error: e.message };
     }
   }
 
@@ -239,9 +275,10 @@ export default function App() {
       data: {
         available: qvacAvailable,
         qvacAvailable,
-        model: qvacModelIdRef.current ? 'LLAMA_3_2_1B_INST_Q4_0' : null,
+        model: qvacModelIdRef.current,
         modelLoading: qvacModelLoading,
         modelProgress: qvacModelProgress,
+        modelStatus,
       },
     };
   }
@@ -330,7 +367,7 @@ export default function App() {
               const matches = (contentLower.match(new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) || []).length;
               score = Math.min(60, matches * 10);
             }
-          } catch (e) {}
+          } catch (e) { }
         }
         if (score > 0) {
           results.push({
@@ -379,7 +416,7 @@ export default function App() {
             if (otherContent.toLowerCase().includes(id.replace(/_/g, ' ').toLowerCase())) {
               backlinks.push({ uri: 'viking://wiki/' + otherId, title: otherId.replace(/_/g, ' '), reason: 'backlink' });
             }
-          } catch (e) {}
+          } catch (e) { }
         }
       }
       return ovOk({ links, backlinks });
@@ -514,7 +551,7 @@ export default function App() {
           const raw = await FileSystem.readAsStringAsync(TDAI_L0_DIR + name);
           const rec = JSON.parse(raw);
           if (rec.session_key === sessionKey) count++;
-        } catch (e) {}
+        } catch (e) { }
       }
       return { flushed: count > 0 };
     } catch (e) {
@@ -537,7 +574,7 @@ export default function App() {
           const matches = (text.match(new RegExp(qLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) || []).length;
           results.push({ ...rec, score: Math.min(1, matches * 0.15) });
         }
-      } catch (e) {}
+      } catch (e) { }
     }
     results.sort((a, b) => b.score - a.score);
     return results.slice(0, limit);
@@ -556,7 +593,7 @@ export default function App() {
           const rec = JSON.parse(raw);
           if (sessionKey && rec.session_key !== sessionKey) continue;
           l0Records.push(rec);
-        } catch (e) {}
+        } catch (e) { }
       }
       l0Records.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
       // Check which L1 records already exist to avoid reprocessing
@@ -612,7 +649,7 @@ export default function App() {
           await FileSystem.writeAsStringAsync(
             TDAI_L1_DIR + l0Id + '.json',
             JSON.stringify({ record_id: 'processed_' + l0Id, processed: true, l0_id: l0Id })
-          ).catch(() => {});
+          ).catch(() => { });
         }
       }
       return { saved, total: saved };
@@ -730,33 +767,16 @@ export default function App() {
     return { success: true, data: { running: false } };
   }
 
-  async function pearRequest(action, body = {}) {
-    if (!pearAvailable || !pearWorkletRef.current) {
-      throw new Error('Pear P2P not available');
-    }
-    const id = ++pearReqIdRef.current;
-    const { IPC } = pearWorkletRef.current;
-    return new Promise((resolve, reject) => {
-      pearPendingRef.current.set(id, { resolve, reject });
-      IPC.write(b4a.from(JSON.stringify({ id, action, body })));
-      setTimeout(() => {
-        if (pearPendingRef.current.has(id)) {
-          pearPendingRef.current.delete(id);
-          reject(new Error('Pear request timeout'));
-        }
-      }, 30000);
-    });
-  }
-
   async function handleSwarmStatus() {
     if (pearAvailable) {
       try {
-        return await pearRequest('swarm/status');
+        const result = await pearRequest('status');
+        return { success: true, data: result };
       } catch (e) {
-        console.warn('[Pear] swarm/status failed, falling back:', e.message);
+        return { success: true, data: { id: null, status: 'local-only', peers: 0, error: e.message } };
       }
     }
-    return { success: true, data: { ...pearStatus, id: null, status: 'local-only' } };
+    return { success: true, data: { id: null, status: 'local-only', peers: 0 } };
   }
 
   async function handleWeb3AuthConfig() {
@@ -792,365 +812,24 @@ export default function App() {
   }
 
   async function handleSwarmCreate(body) {
-    if (pearAvailable) {
-      try {
-        return await pearRequest('swarm/create', body);
-      } catch (e) {
-        console.warn('[Pear] swarm/create failed, falling back:', e.message);
-      }
-    }
     const id = await getMachineId();
     const scope = body && body.scope;
     const pageId = body && body.pageId;
     const topic = scope === 'page'
       ? `${id}-page-${pageId || 'current'}`
       : `${id}-wiki`;
+    if (pearAvailable) {
+      try { await pearRequest('join', { topic }); } catch (e) { }
+    }
     return { success: true, data: { topic, inviteUrl: 'chimera://join/' + topic } };
   }
 
   async function handleSwarmJoin(body) {
-    if (pearAvailable) {
-      try {
-        return await pearRequest('swarm/join', body);
-      } catch (e) {
-        console.warn('[Pear] swarm/join failed, falling back:', e.message);
-      }
-    }
     const topic = body.topic || (await getMachineId() + '-wiki');
+    if (pearAvailable) {
+      try { await pearRequest('join', { topic }); } catch (e) { }
+    }
     return { success: true, data: { topic, inviteUrl: 'chimera://join/' + topic } };
-  }
-
-  async function handleSwarmBroadcast(body) {
-    if (pearAvailable) {
-      try {
-        return await pearRequest('swarm/broadcast', body);
-      } catch (e) {
-        console.warn('[Pear] swarm/broadcast failed:', e.message);
-      }
-    }
-    return { success: true, data: { scope: body?.scope || 'wiki', pageId: body?.pageId || null, local: true } };
-  }
-
-  async function handleSwarmTopics(body) {
-    if (pearAvailable) {
-      try {
-        return await pearRequest('swarm/topics', body);
-      } catch (e) {
-        console.warn('[Pear] swarm/topics failed, falling back:', e.message);
-      }
-    }
-    return { success: true, data: { wiki: [], page: [] } };
-  }
-
-  // ============================
-  // Soccer Coach Integration Endpoints (On-Device)
-  // ============================
-
-  // AI Coach using local prompt templates and rule-based insights
-  async function handleSoccerAiCoach(body) {
-    try {
-      await initSoccerDirs();
-
-      const coachPromptPath = AI_COACH_PROMPTS_DIR + 'coach_template.txt';
-      let coachTemplate = '';
-      try {
-        coachTemplate = await FileSystem.readAsStringAsync(coachPromptPath);
-      } catch (e) {
-        coachTemplate = `You are a tactical soccer coach assistant. Analyze this match data: {data}`;
-        await FileSystem.writeAsStringAsync(coachPromptPath, coachTemplate);
-      }
-
-      const prompt = coachTemplate.replace('{data}', JSON.stringify(body.events || []));
-      const insight = generateLocalInsight(body.events, body.role || 'coach');
-
-      return { success: true, insight };
-    } catch (e) {
-      return { success: false, error: e.message };
-    }
-  }
-
-  function generateLocalInsight(events, role) {
-    if (!events || events.length === 0) {
-      return 'No match data available for analysis.';
-    }
-
-    const eventTypes = {};
-    events.forEach(e => {
-      eventTypes[e.type] = (eventTypes[e.type] || 0) + 1;
-    });
-
-    let analysis = `**Match Analysis**\n\n`;
-    analysis += `**Event Summary**:\n`;
-    Object.entries(eventTypes).forEach(([type, count]) => {
-      analysis += `- ${type}: ${count}\n`;
-    });
-
-    if (role === 'coach') {
-      analysis += `\n**Tactical Observations**:\n`;
-      analysis += `- Total events analyzed: ${events.length}\n`;
-      analysis += `- Key patterns detected based on event distribution\n`;
-      analysis += `- Recommend reviewing player positioning based on event locations\n`;
-    } else {
-      analysis += `\n**Simple Summary**:\n`;
-      analysis += `- The team had ${events.length} total events\n`;
-      analysis += `- Main activities: ${Object.keys(eventTypes).slice(0, 3).join(', ')}\n`;
-    }
-
-    return analysis;
-  }
-
-  // ============================
-  // On-Device LLM (QVAC)
-  // ============================
-
-  async function handleSoccerLlmConfig() {
-    return {
-      success: true,
-      config: {
-        provider: 'qvac',
-        model: qvacModelIdRef.current ? 'LLAMA_3_2_1B_INST_Q4_0' : null,
-        loaded: qvacModelIdRef.current !== null,
-      },
-    };
-  }
-
-  async function callQvacLlm(messages) {
-    if (!qvacModelIdRef.current) {
-      throw new Error('QVAC model not loaded');
-    }
-    const { completion } = await import('@qvac/sdk');
-    const history = messages.filter(m => m.role === 'user' || m.role === 'assistant').map(m => ({ role: m.role, content: m.content }));
-    const result = completion({ modelId: qvacModelIdRef.current, history, stream: false });
-    if (result && typeof result.text === 'object' && result.text !== null && typeof result.text.then === 'function') {
-      return await result.text;
-    }
-    if (result && typeof result.tokenStream === 'object' && result.tokenStream !== null && typeof result.tokenStream[Symbol.asyncIterator] === 'function') {
-      let text = '';
-      for await (const token of result.tokenStream) {
-        text += token;
-      }
-      return text;
-    }
-    return String(result || '');
-  }
-
-  async function handleSoccerAiCoach(body) {
-    try {
-      await initSoccerDirs();
-
-      const coachPromptPath = AI_COACH_PROMPTS_DIR + 'coach_template.txt';
-      let coachTemplate = '';
-      try {
-        coachTemplate = await FileSystem.readAsStringAsync(coachPromptPath);
-      } catch (e) {
-        coachTemplate = `You are a tactical soccer coach assistant. Analyze this match data and provide actionable coaching insights: {data}`;
-        await FileSystem.writeAsStringAsync(coachPromptPath, coachTemplate);
-      }
-
-      const prompt = coachTemplate.replace('{data}', JSON.stringify(body.events || []));
-
-      if (qvacModelIdRef.current) {
-        const messages = [
-          { role: 'system', content: 'You are an expert soccer coach assistant.' },
-          { role: 'user', content: prompt }
-        ];
-        const insight = await callQvacLlm(messages);
-        return { success: true, insight, source: 'qvac' };
-      }
-
-      const insight = generateLocalInsight(body.events, body.role || 'coach');
-      return { success: true, insight, source: 'local' };
-    } catch (e) {
-      return { success: false, error: e.message };
-    }
-  }
-
-  async function handleSoccerAiChat(body) {
-    try {
-      await handleTdaiCapture({
-        user_content: body.message,
-        assistant_content: null,
-        session_key: 'soccer-coach'
-      });
-
-      let response;
-      if (qvacModelIdRef.current) {
-        const history = await getTdaiSessionRecords('soccer-coach', 6);
-        const messages = [
-          { role: 'system', content: 'You are a helpful soccer coach assistant for tactical analysis, player evaluation, and match planning.' },
-          ...history,
-          { role: 'user', content: body.message }
-        ];
-        response = await callQvacLlm(messages);
-      } else {
-        response = `I understand you're asking about: "${body.message}". As your soccer coach assistant, I can help with tactical analysis, player evaluations, and match planning. QVAC model is not loaded.`;
-      }
-
-      await handleTdaiCapture({
-        user_content: body.message,
-        assistant_content: response,
-        session_key: 'soccer-coach'
-      });
-
-      return { success: true, response, source: qvacModelIdRef.current ? 'qvac' : 'local' };
-    } catch (e) {
-      return { success: false, error: e.message };
-    }
-  }
-
-  async function getTdaiSessionRecords(sessionKey, limit) {
-    const entries = await FileSystem.readDirectoryAsync(TDAI_L0_DIR).catch(() => []);
-    const records = [];
-    for (const name of entries) {
-      if (!name.endsWith('.json')) continue;
-      try {
-        const raw = await FileSystem.readAsStringAsync(TDAI_L0_DIR + name);
-        const rec = JSON.parse(raw);
-        if (rec.session_key === sessionKey) {
-          records.push(rec);
-        }
-      } catch (e) {}
-    }
-    records.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
-    return records.slice(-limit).map(r => ({
-      role: r.role === 'assistant' ? 'assistant' : 'user',
-      content: r.message_text || ''
-    }));
-  }
-
-  async function handleSoccerVisualize(body) {
-    try {
-      await initSoccerDirs();
-
-      const vizType = body.data_type || 'event_summary';
-      const events = body.events || [];
-      let vizData = { type: vizType };
-
-      if (vizType === 'event_summary') {
-        const counts = {};
-        events.forEach(e => {
-          counts[e.type] = (counts[e.type] || 0) + 1;
-        });
-        vizData.labels = Object.keys(counts);
-        vizData.values = Object.values(counts);
-      } else if (vizType === 'shot_map') {
-        vizData.shots = events
-          .filter(e => e.type === 'Shot')
-          .map(e => ({
-            x: (e.location && e.location[0]) || 50,
-            y: (e.location && e.location[1]) || 50,
-            xg: e.xg || 0,
-            outcome: e.outcome || 'Unknown',
-            player: e.player || 'Unknown',
-          }));
-      } else if (vizType === 'passing_network') {
-        const passes = events.filter(e => e.type === 'Pass');
-        const nodes = {};
-        const links = {};
-        passes.forEach(p => {
-          const src = p.player || 'Unknown';
-          const dst = p.recipient || 'Unknown';
-          nodes[src] = (nodes[src] || 0) + 1;
-          nodes[dst] = (nodes[dst] || 0) + 1;
-          const key = src + '->' + dst;
-          links[key] = (links[key] || 0) + 1;
-        });
-        vizData.nodes = Object.entries(nodes).map(([name, count]) => ({ name, count }));
-        vizData.links = Object.entries(links).map(([key, count]) => {
-          const parts = key.split('->');
-          return { source: parts[0], target: parts[1], count };
-        });
-      } else if (vizType === 'xg_timeline') {
-        const shots = events
-          .filter(e => e.type === 'Shot' && typeof e.minute === 'number' && typeof e.xg === 'number')
-          .sort((a, b) => a.minute - b.minute);
-        let cumulative = 0;
-        vizData.points = shots.map(s => {
-          cumulative += s.xg;
-          return { minute: s.minute, xg: cumulative, team: s.team || 'Unknown' };
-        });
-      }
-
-      return { success: true, vizData };
-    } catch (e) {
-      return { success: false, error: e.message };
-    }
-  }
-
-  async function handleSoccerReference(query) {
-    try {
-      const topic = query.replace(/^topic=/, '');
-
-      const refPath = ANALYTICS_DATA_DIR + 'reference_' + topic + '.md';
-      try {
-        const content = await FileSystem.readAsStringAsync(refPath);
-        return { success: true, topic, content };
-      } catch (e) {
-        const basicRef = '# ' + topic + '\n\nReference information from analytics-handbook. Full content requires importing the notebook data.';
-        return { success: true, topic, content: basicRef };
-      }
-    } catch (e) {
-      return { success: false, error: e.message };
-    }
-  }
-
-  // ============================
-  // Data Import for Production
-  // ============================
-
-  async function handleSoccerImport(body) {
-    try {
-      await initSoccerDirs();
-      const { source, format, content, target_page } = body;
-      if (!content) {
-        return { success: false, error: 'Missing content' };
-      }
-
-      let parsed;
-      if (format === 'json') {
-        parsed = JSON.parse(content);
-      } else if (format === 'csv') {
-        parsed = parseSimpleCsv(content);
-      } else {
-        return { success: false, error: 'Unsupported format. Use json or csv.' };
-      }
-
-      const pageId = target_page || (source ? source.replace(/\W+/g, '_') : 'imported_data');
-      const markdown = convertToMarkdown(parsed, source);
-      await FileSystem.writeAsStringAsync(WIKI_DIR + pageId + '.md', markdown);
-
-      return { success: true, page: pageId, rows: Array.isArray(parsed) ? parsed.length : 1 };
-    } catch (e) {
-      return { success: false, error: e.message };
-    }
-  }
-
-  function parseSimpleCsv(text) {
-    const lines = text.trim().split('\n').filter(Boolean);
-    if (lines.length < 2) return [];
-    const headers = lines[0].split(',').map(h => h.trim());
-    return lines.slice(1).map(line => {
-      const values = line.split(',');
-      const row = {};
-      headers.forEach((h, i) => {
-        row[h] = values[i] ? values[i].trim() : '';
-      });
-      return row;
-    });
-  }
-
-  function convertToMarkdown(data, source) {
-    if (!Array.isArray(data) || data.length === 0) {
-      return `# Imported Data\n\nSource: ${source || 'unknown'}\n\n\`\`\`json\n${JSON.stringify(data, null, 2)}\n\`\`\`\n`;
-    }
-    const headers = Object.keys(data[0]);
-    let md = `# Imported Data: ${source || 'unknown'}\n\n`;
-    md += `| ${headers.join(' | ')} |\n`;
-    md += `| ${headers.map(() => '---').join(' | ')} |\n`;
-    data.forEach(row => {
-      md += `| ${headers.map(h => String(row[h] || '')).join(' | ')} |\n`;
-    });
-    return md;
   }
 
   const sendBridgeResponse = (id, res) => {
@@ -1178,8 +857,8 @@ export default function App() {
       if (msg.type === 'wallet-connected') {
         console.log('[Bridge] wallet connected, returning to app');
         try {
-          Linking.openURL('io.chimera.mobile://wallet').catch(() => {});
-        } catch (e) {}
+          Linking.openURL('io.chimera.mobile://wallet').catch(() => { });
+        } catch (e) { }
         return;
       }
       if (msg.type === 'open-browser') {
@@ -1251,25 +930,9 @@ export default function App() {
         } else if (method === 'POST' && cleanPath === '/api/web3auth-jwt') {
           res = await handleWeb3AuthJwt(body);
         } else if (method === 'POST' && cleanPath === '/api/swarm/create') {
-          res = await handleSwarmCreate(body);
+          res = await handleSwarmCreate();
         } else if (method === 'POST' && cleanPath === '/api/swarm/join') {
-          res = await handleSwarmJoin(body);
-        } else if (method === 'POST' && cleanPath === '/api/swarm/broadcast') {
-          res = await handleSwarmBroadcast(body);
-        } else if (method === 'GET' && cleanPath === '/api/swarm/topics') {
-          res = await handleSwarmTopics(body);
-        } else if (method === 'POST' && cleanPath === '/api/soccer/ai-coach') {
-          res = await handleSoccerAiCoach(body);
-        } else if (method === 'POST' && cleanPath === '/api/soccer/ai-chat') {
-          res = await handleSoccerAiChat(body);
-        } else if (method === 'POST' && cleanPath === '/api/soccer/visualize') {
-          res = await handleSoccerVisualize(body);
-        } else if (method === 'GET' && cleanPath.startsWith('/api/soccer/reference')) {
-          res = await handleSoccerReference(query);
-        } else if (method === 'POST' && cleanPath === '/api/soccer/import') {
-          res = await handleSoccerImport(body);
-        } else if ((method === 'POST' || method === 'GET') && cleanPath === '/api/soccer/llm-config') {
-          res = await handleSoccerLlmConfig(body);
+          res = await handleSwarmJoin();
         } else {
           res = { success: false, error: 'Not found: ' + method + ' ' + cleanPath };
         }
@@ -1289,6 +952,7 @@ export default function App() {
       if (window.__bridgeActive) return;
       window.__bridgeActive = true;
       window.__bridgeFetch = true;
+      try { localStorage.setItem('chimera_ai', '0'); } catch (e) {}
       window.__appVersion = ${JSON.stringify(Constants.nativeAppVersion || Constants.expoConfig?.version || '1.0.22')};
       window.__machineId = ${JSON.stringify(machineId)};
       window.__apiOrigin = ${JSON.stringify(machineId ? 'https://chimera.local/' + machineId : 'https://chimera.local')};
@@ -1398,7 +1062,7 @@ export default function App() {
     );
   }
 
-  if (!machineId) {
+  if (!machineId || (Platform.OS === 'ios' && iosHtml === null)) {
     return (
       <View style={styles.container}>
         <ActivityIndicator size="large" color="#00e5ff" />
@@ -1412,7 +1076,7 @@ export default function App() {
       <WebView
         ref={webViewRef}
         source={Platform.OS === 'ios'
-          ? { uri: FileSystem.bundleDirectory + 'index.html' }
+          ? { html: iosHtml, baseUrl: FileSystem.bundleDirectory }
           : { uri: 'file:///android_asset/index.html' }}
         style={styles.webview}
         injectedJavaScriptBeforeContentLoaded={injectedBridge}
@@ -1457,6 +1121,12 @@ export default function App() {
           )}
         </View>
       )}
+      {/* Debug status overlay */}
+      <View style={{ position: 'absolute', top: 50, left: 10, right: 10, backgroundColor: 'rgba(0,0,0,0.7)', padding: 10, borderRadius: 8, zIndex: 100 }}>
+        <Text style={{ color: '#00e5ff', fontSize: 10 }}>
+          QVAC: {qvacAvailable ? 'YES' : 'NO'} | Model: {modelStatus} | Pear: {pearAvailable ? 'YES' : 'NO'} | Peers: {pearStatus.peers}
+        </Text>
+      </View>
     </View>
   );
 }
