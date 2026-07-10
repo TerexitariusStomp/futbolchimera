@@ -147,6 +147,14 @@ jobs:
             cp apps/mobile-expo/ios/release-output.log release-output.log
             git add release-output.log
           fi
+          if [ -f apps/mobile-expo/ios/xcodebuild.log ]; then
+            cp apps/mobile-expo/ios/xcodebuild.log xcodebuild.log
+            git add xcodebuild.log
+          fi
+          if [ -f apps/mobile-expo/prebuild.log ]; then
+            cp apps/mobile-expo/prebuild.log prebuild.log
+            git add prebuild.log
+          fi
           git commit -m "CI debug logs" || true
           git push origin ci-debug
 
