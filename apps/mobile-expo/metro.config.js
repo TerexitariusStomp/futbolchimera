@@ -20,7 +20,7 @@ config.resolver.resolveRequest = (context, moduleName, platform, realModuleName)
     return { filePath: path.resolve(__dirname, 'stubs/tinyld-heavy.js'), type: 'sourceFile' };
   }
   if (moduleName === '@qvac/sdk/dist/worker.mobile.bundle' || moduleName === '@qvac/sdk/worker.mobile.bundle') {
-    return { filePath: path.resolve(__dirname, 'node_modules/@qvac/sdk/dist/worker.mobile.bundle.js'), type: 'sourceFile' };
+    return { filePath: path.resolve(__dirname, 'qvac/worker.bundle.js'), type: 'sourceFile' };
   }
   if (defaultResolveRequest) {
     return defaultResolveRequest(context, moduleName, platform, realModuleName);

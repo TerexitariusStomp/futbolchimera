@@ -180,7 +180,7 @@ jobs:
           else:
               size = os.path.getsize(log_path)
               print(f'::error::xcodebuild.log size={size} bytes')
-              patterns = [r': error:', r': fatal error:', r'FAILED', r'\*\* BUILD', r'error\[', r'Build failed', r'The following build commands failed', r'Uncaught exception', r'undefined']
+              patterns = [r': error:', r': fatal error:', r'FAILED', r'\*\* BUILD', r'error\[', r'Build failed', r'The following build commands failed', r'Uncaught exception', r'Failed to get the SHA-1']
               hits = []
               lines = []
               with open(log_path, 'rb') as f:
