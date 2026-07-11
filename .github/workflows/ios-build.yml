@@ -180,17 +180,22 @@ jobs:
           else:
               size = os.path.getsize(log_path)
               print(f'::error::xcodebuild.log size={size} bytes')
-              patterns = [r': error:', r': fatal error:', r'FAILED', r'\*\* BUILD', r'error\[', r'Build failed']
+              patterns = [r': error:', r': fatal error:', r'FAILED', r'\*\* BUILD', r'error\[', r'Build failed', r'The following build commands failed', r'Uncaught exception', r'undefined']
               hits = []
+              lines = []
               with open(log_path, 'rb') as f:
                   for raw in f:
                       line = raw.decode('utf-8', errors='replace').rstrip('\n')
+                      lines.append(line)
                       if any(re.search(p, line) for p in patterns):
                           hits.append(line)
               print(f'::error::{len(hits)} matching lines')
-              tail = '\n'.join(hits[-30:])
+              if hits:
+                  tail = '\n'.join(hits[-30:])
+              else:
+                  tail = '\n'.join(lines[-30:])
               msg = tail.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
-              print(f'::error::xcodebuild errors:%0A{msg}')
+              print(f'::error::xcodebuild tail:%0A{msg}')
           PY
 
       - name: Upload artifact
