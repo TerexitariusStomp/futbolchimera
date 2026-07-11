@@ -173,20 +173,24 @@ jobs:
         if: failure()
         run: |
           python3 - <<'PY'
-          import os
+          import os, re
           log_path = 'apps/mobile-expo/ios/xcodebuild.log'
           if not os.path.exists(log_path):
               print('::error::xcodebuild.log not found')
           else:
               size = os.path.getsize(log_path)
               print(f'::error::xcodebuild.log size={size} bytes')
+              patterns = [r': error:', r': fatal error:', r'FAILED', r'\*\* BUILD', r'error\[', r'Build failed']
+              hits = []
               with open(log_path, 'rb') as f:
-                  f.seek(0, 2)
-                  end = f.tell()
-                  f.seek(max(0, end - 6000), 0)
-                  tail = f.read(6000).decode('utf-8', errors='replace')
+                  for raw in f:
+                      line = raw.decode('utf-8', errors='replace').rstrip('\n')
+                      if any(re.search(p, line) for p in patterns):
+                          hits.append(line)
+              print(f'::error::{len(hits)} matching lines')
+              tail = '\n'.join(hits[-30:])
               msg = tail.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
-              print(f'::error::xcodebuild tail:%0A{msg}')
+              print(f'::error::xcodebuild errors:%0A{msg}')
           PY
 
       - name: Upload artifact
