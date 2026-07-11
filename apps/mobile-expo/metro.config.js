@@ -7,6 +7,9 @@ const config = getDefaultConfig(__dirname);
 config.resolver.sourceExts = [...config.resolver.sourceExts, 'mjs'];
 config.resolver.assetExts = [...config.resolver.assetExts, 'bin', 'gguf'];
 
+// Ensure large vendored bundles under node_modules are visible to Metro's file map
+config.watchFolders = [...(config.watchFolders || []), path.resolve(__dirname, 'node_modules/@qvac/sdk/dist')];
+
 // Alias missing @qvac/sdk internal dependency
 const defaultResolveRequest = config.resolver.resolveRequest;
 config.resolver.resolveRequest = (context, moduleName, platform, realModuleName) => {
