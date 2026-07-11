@@ -1,0 +1,14 @@
+website
+website-new
+external
+templates
+qvac/frontend/node_modules
+qvac/frontend/dist
+apps/mobile-expo/android
+apps/mobile-expo/ios
+apps/mobile-localchimera/android
+apps/mobile-localchimera/ios
+sdk/node_modules
+**/*.apk
+**/build
+.git

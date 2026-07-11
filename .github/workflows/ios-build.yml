@@ -1,0 +1,240 @@
+name: iOS Simulator Build
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-ios:
+    runs-on: macos-15
+    timeout-minutes: 120
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Cache node_modules
+        uses: actions/cache@v4
+        with:
+          path: apps/mobile-expo/node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('apps/mobile-expo/package.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      - name: Install dependencies
+        working-directory: apps/mobile-expo
+        run: |
+          set -x
+          node -v
+          npm -v
+          # Use --ignore-scripts + --legacy-peer-deps to avoid @qvac/sdk peer dep conflict
+          npm install --no-save --ignore-scripts --legacy-peer-deps
+          node scripts/patch-bare-kit.js
+          node scripts/patch-qvac-sdk.js
+          node scripts/patch-expo-device.js
+
+      - name: Cache CocoaPods
+        uses: actions/cache@v4
+        with:
+          path: |
+            apps/mobile-expo/ios/Pods
+            ~/Library/Developer/Xcode/DerivedData
+          key: ${{ runner.os }}-pods-${{ hashFiles('apps/mobile-expo/ios/Podfile.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pods-
+
+      - name: Check CocoaPods
+        run: |
+          which pod || echo "CocoaPods not found"
+          pod --version || true
+
+      - name: Prebuild iOS
+        working-directory: apps/mobile-expo
+        run: |
+          npx expo prebuild --platform ios --verbose 2>&1 | tee prebuild.log || {
+            echo "### expo prebuild failed" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            tail -n 200 prebuild.log >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            exit 1
+          }
+
+      - name: Install CocoaPods
+        working-directory: apps/mobile-expo/ios
+        run: pod install
+
+      - name: Patch Pods sources
+        working-directory: apps/mobile-expo
+        run: node scripts/patch-pods.js
+
+      - name: Remove arm64 device capability
+        working-directory: apps/mobile-expo/ios/Chimera
+        run: |
+          sed -i '' '/<key>UIRequiredDeviceCapabilities<\/key>/,/<\/array>/d' Info.plist || true
+          cat Info.plist | grep "UIRequiredDeviceCapabilities" || echo "UIRequiredDeviceCapabilities removed"
+
+      - name: List Xcode schemes
+        working-directory: apps/mobile-expo/ios
+        run: xcodebuild -list
+
+      - name: Build iOS simulator app
+        working-directory: apps/mobile-expo/ios
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -workspace Chimera.xcworkspace \
+            -scheme Chimera \
+            -sdk iphonesimulator \
+            -configuration Release \
+            -derivedDataPath ./DerivedData \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tee xcodebuild.log
+          EXIT=${PIPESTATUS[0]}
+          if [ $EXIT -ne 0 ]; then
+            echo "### xcodebuild failed" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            tail -n 300 xcodebuild.log >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            exit $EXIT
+          fi
+
+      - name: Package .app for Appetize
+        id: package
+        working-directory: apps/mobile-expo/ios
+        run: |
+          set -eux
+          APP_PATH="DerivedData/Build/Products/Release-iphonesimulator/Chimera.app"
+          echo "Expected app path: $APP_PATH" | tee package-debug.log
+          if [ ! -d "$APP_PATH" ]; then
+            echo "=== Searching for any .app bundle ===" | tee -a package-debug.log
+            find DerivedData -name "*.app" -type d | tee -a package-debug.log || true
+            echo "=== Build/Products contents ===" | tee -a package-debug.log
+            find DerivedData/Build/Products -maxdepth 3 -type d 2>/dev/null | sort | tee -a package-debug.log || true
+            echo "ERROR: Chimera.app not found at expected path" | tee -a package-debug.log
+            exit 1
+          fi
+          ABS_PATH="$(cd "$(dirname "$APP_PATH")" && pwd)/$(basename "$APP_PATH")"
+          echo "Absolute app path: $ABS_PATH" | tee -a package-debug.log
+          zip -r Chimera.app.zip "$ABS_PATH" | tee -a package-debug.log
+          echo "Created Chimera.app.zip size: $(stat -f%z Chimera.app.zip 2>/dev/null || stat -c%s Chimera.app.zip 2>/dev/null) bytes" | tee -a package-debug.log
+          ls -lh Chimera.app.zip | tee -a package-debug.log
+
+      - name: Commit debug log on failure
+        if: failure()
+        run: |
+          git config user.email "ci@example.com"
+          git config user.name "GitHub Actions CI"
+          git checkout --orphan ci-debug || git checkout ci-debug
+          if [ -f apps/mobile-expo/ios/package-debug.log ]; then
+            cp apps/mobile-expo/ios/package-debug.log package-debug.log
+            git add package-debug.log
+          fi
+          if [ -f apps/mobile-expo/ios/release-output.log ]; then
+            cp apps/mobile-expo/ios/release-output.log release-output.log
+            git add release-output.log
+          fi
+          if [ -f apps/mobile-expo/ios/xcodebuild.log ]; then
+            cp apps/mobile-expo/ios/xcodebuild.log xcodebuild.log
+            git add xcodebuild.log
+          fi
+          if [ -f apps/mobile-expo/prebuild.log ]; then
+            cp apps/mobile-expo/prebuild.log prebuild.log
+            git add prebuild.log
+          fi
+          git commit -m "CI debug logs" || true
+          git push origin ci-debug
+
+      - name: Upload build logs artifact
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-build-logs
+          path: |
+            apps/mobile-expo/ios/xcodebuild.log
+            apps/mobile-expo/prebuild.log
+            apps/mobile-expo/ios/package-debug.log
+            apps/mobile-expo/ios/release-output.log
+
+      - name: Annotate build failure
+        if: failure()
+        run: |
+          python3 - <<'PY'
+          import os, re
+          log_path = 'apps/mobile-expo/ios/xcodebuild.log'
+          if not os.path.exists(log_path):
+              print('::error::xcodebuild.log not found')
+          else:
+              size = os.path.getsize(log_path)
+              print(f'::error::xcodebuild.log size={size} bytes')
+              patterns = [r': error:', r': fatal error:', r'FAILED', r'\*\* BUILD', r'error\[', r'Build failed', r'The following build commands failed', r'Uncaught exception', r'Failed to get the SHA-1']
+              hits = []
+              lines = []
+              with open(log_path, 'rb') as f:
+                  for raw in f:
+                      line = raw.decode('utf-8', errors='replace').rstrip('\n')
+                      lines.append(line)
+                      if any(re.search(p, line) for p in patterns):
+                          hits.append(line)
+              print(f'::error::{len(hits)} matching lines')
+              if hits:
+                  tail = '\n'.join(hits[-30:])
+              else:
+                  tail = '\n'.join(lines[-30:])
+              msg = tail.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+              print(f'::error::xcodebuild tail:%0A{msg}')
+          PY
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Chimera-ios-app
+          path: apps/mobile-expo/ios/Chimera.app.zip
+
+      - name: Upload to Appetize
+        if: success()
+        run: |
+          cd apps/mobile-expo/ios
+          APPETIZE_TOKEN="${{ secrets.APPETIZE_TOKEN }}"
+          APPETIZE_PUBLIC_KEY="${{ secrets.APPETIZE_PUBLIC_KEY }}"
+          if [ -z "$APPETIZE_TOKEN" ]; then
+            echo "APPETIZE_TOKEN secret not set. Skipping Appetize upload."
+            echo "Set the APPETIZE_TOKEN repository secret to enable upload."
+            exit 0
+          fi
+          if [ -z "$APPETIZE_PUBLIC_KEY" ]; then
+            echo "APPETIZE_PUBLIC_KEY not set. Creating new app on Appetize."
+            RESPONSE=$(curl -s -X POST \
+              https://api.appetize.io/v1/apps \
+              -H "X-API-KEY: $APPETIZE_TOKEN" \
+              -F "file=@Chimera.app.zip" \
+              -F "platform=ios")
+          else
+            echo "Updating existing app $APPETIZE_PUBLIC_KEY on Appetize."
+            RESPONSE=$(curl -s -X POST \
+              "https://api.appetize.io/v1/apps/$APPETIZE_PUBLIC_KEY" \
+              -H "X-API-KEY: $APPETIZE_TOKEN" \
+              -F "file=@Chimera.app.zip" \
+              -F "platform=ios")
+          fi
+          echo "Appetize response: $RESPONSE"
+          echo '### Appetize Upload' >> $GITHUB_STEP_SUMMARY
+          echo "Response: $RESPONSE" >> $GITHUB_STEP_SUMMARY
+          PUBLICKEY=$(echo "$RESPONSE" | python3 -c "import sys, json; d=json.load(sys.stdin); print(d.get('publicKey',''))")
+          if [ -n "$PUBLICKEY" ]; then
+            echo "Appetize URL: https://appetize.io/app/$PUBLICKEY"
+            echo "Appetize URL: https://appetize.io/app/$PUBLICKEY" >> $GITHUB_STEP_SUMMARY
+          fi

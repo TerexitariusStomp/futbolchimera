@@ -1,0 +1,123 @@
+name: LocalChimera Android Build
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'apps/mobile-localchimera/**'
+      - '.github/workflows/android-build-localchimera.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Cache node_modules
+        uses: actions/cache@v4
+        with:
+          path: apps/mobile-localchimera/node_modules
+          key: ${{ runner.os }}-node-localchimera-${{ hashFiles('apps/mobile-localchimera/package.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-localchimera-
+
+      - name: Install dependencies
+        working-directory: apps/mobile-localchimera
+        run: |
+          set -x
+          npm install --no-save --ignore-scripts --legacy-peer-deps
+          node scripts/patch-bare-kit.js
+          node scripts/patch-qvac-sdk.js
+          node scripts/patch-expo-device.js
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: 17
+          distribution: temurin
+
+      - name: Prebuild Android
+        working-directory: apps/mobile-localchimera
+        run: |
+          npx expo prebuild --platform android --verbose 2>&1 | tee prebuild.log || {
+            echo "### expo prebuild failed" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            tail -n 200 prebuild.log >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            exit 1
+          }
+
+      - name: Patch Android build.gradle
+        working-directory: apps/mobile-localchimera
+        run: python3 scripts/patch-android-build.py android/app/build.gradle
+
+      - name: Build Android release
+        working-directory: apps/mobile-localchimera/android
+        run: |
+          set -o pipefail
+          ./gradlew assembleRelease 2>&1 | tee android-build.log
+          EXIT=${PIPESTATUS[0]}
+          if [ $EXIT -ne 0 ]; then
+            echo "### Gradle build failed" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            tail -n 300 android-build.log >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            exit $EXIT
+          fi
+
+      - name: Upload build logs artifact
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-build-logs-localchimera
+          path: |
+            apps/mobile-localchimera/android/android-build.log
+            apps/mobile-localchimera/prebuild.log
+
+      - name: Annotate build failure
+        if: failure()
+        run: |
+          python3 - <<'PY'
+          import os, re
+          log_path = 'apps/mobile-localchimera/android/android-build.log'
+          if not os.path.exists(log_path):
+              print('::error::android-build.log not found')
+          else:
+              size = os.path.getsize(log_path)
+              print(f'::error::android-build.log size={size} bytes')
+              patterns = [r': error:', r': fatal error:', r'FAILED', r'BUILD FAILED', r'Execution failed', r'Could not resolve', r'Failed to get the SHA-1']
+              hits = []
+              lines = []
+              with open(log_path, 'rb') as f:
+                  for raw in f:
+                      line = raw.decode('utf-8', errors='replace').rstrip('\n')
+                      lines.append(line)
+                      if any(re.search(p, line) for p in patterns):
+                          hits.append(line)
+              print(f'::error::{len(hits)} matching lines')
+              if hits:
+                  tail = '\n'.join(hits[-30:])
+              else:
+                  tail = '\n'.join(lines[-30:])
+              msg = tail.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+              print(f'::error::gradle tail:%0A{msg}')
+          PY
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: LocalChimera-android-apk
+          path: apps/mobile-localchimera/android/app/build/outputs/apk/release/*.apk

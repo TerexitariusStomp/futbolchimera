@@ -1,0 +1,11 @@
+external/
+templates/
+website/
+website-new/
+apps/mobile-expo/android
+apps/mobile-expo/ios
+apps/mobile-localchimera/android
+apps/mobile-localchimera/ios
+**/*.apk
+**/build
+.git
