@@ -1,0 +1,12 @@
+node_modules/
+.expo/
+dist/
+web-build/
+*.jks
+*.key
+*.mobileprovision
+*.orig.*
+*.log
+.DS_Store
+frontend-html.js
+pear-worker.bundle
